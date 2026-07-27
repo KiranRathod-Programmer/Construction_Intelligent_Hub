@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CIH | Real-Time Construction Dashboard</title>
+    <title>CIH | Project Management</title>
     <link rel="stylesheet" href="styles/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏗️</text></svg>">
 </head>
@@ -18,7 +18,7 @@
                 </a>
                 <div class="dash-search-container">
                     <span class="dash-search-icon">🔍</span>
-                    <input type="text" class="dash-search-input" placeholder="Search analytics, telemetry, or sites...">
+                    <input type="text" class="dash-search-input" id="projectSearch" placeholder="Search by project or city..." oninput="filterProjects()">
                 </div>
             </div>
 
@@ -41,8 +41,8 @@
         <!-- LEFT SIDEBAR -->
         <aside class="dash-sidebar">
             <ul class="dash-menu">
-                <li><a href="dashboard.html" class="dash-menu-item active">📊 Dashboard</a></li>
-                <li><a href="project-management.html" class="dash-menu-item">🏗️ Project Management</a></li>
+                <li><a href="dashboard.html" class="dash-menu-item">📊 Dashboard</a></li>
+                <li><a href="project-management.html" class="dash-menu-item active">🏗️ Project Management</a></li>
                 <li><a href="team-management.html" class="dash-menu-item">👥 Team Management</a></li>
                 <li><a href="budget.html" class="dash-menu-item">💵 Budget</a></li>
                 <li><a href="materials.html" class="dash-menu-item">📦 Materials</a></li>
@@ -54,50 +54,28 @@
 
         </aside>
 
-        <!-- MAIN REDESIGNED DASHBOARD CONTENT -->
+        <!-- MAIN PROJECT MANAGEMENT CONTENT -->
         <main class="dash-main">
-            <!-- TOP SUBTITLE AND ACTION BUTTONS ROW -->
-            <div class="dash-kpi-top-bar">
-                <div class="dash-kpi-subtitle" id="dashboardSubtitle">
-                    Real-time construction intelligence for all active sites.
+            <div class="dash-top-title-row">
+                <div>
+                    <h1 class="dash-page-title">Project Management</h1>
+                    <p class="dash-page-sub">Manage, filter, and track all your active major infrastructure projects.</p>
                 </div>
-                <div class="dash-kpi-actions">
-                    <button class="kpi-btn-primary" onclick="openModal('newProjectModal')">
-                        <span style="font-size: 16px; font-weight: 700;">+</span> Create Project
+                <div class="dash-filter-controls">
+                    <button class="dash-btn-filter" onclick="alert('Filter menu opened')">☵ Filter</button>
+                    <button class="dash-btn-filter" onclick="alert('Sorting options: Recent, Budget, Progress')">⇅ Sort: Recent</button>
+                    <button class="btn-primary" style="padding: 9px 20px; font-size: 13px;" onclick="openModal('newProjectModal')">
+                        + New Project
                     </button>
                 </div>
             </div>
 
-            <!-- KPI STATS CARDS GRID (5 CARDS) -->
-            <div class="kpi-cards-grid" id="kpiCardsGrid">
-                <!-- Dynamically populated by js/main.js from CIH_DATASET.dashboardStats -->
+            <!-- PROJECT CARDS GRID -->
+            <div class="dash-project-grid" id="projectGrid">
+                <!-- Dynamically rendered by js/main.js using CIH_DATASET.projects -->
             </div>
 
-            <!-- PROJECT PROGRESS ANALYTICS SECTION -->
-            <section class="analytics-container">
-                <div class="analytics-header">
-                    <div>
-                        <h2 class="analytics-title">Project Progress Analytics</h2>
-                        <div class="analytics-sub">Overall performance metrics across active job sites</div>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="dash-btn-filter" style="padding: 6px 14px; font-size: 12px;">Full View</button>
-                        <button class="dash-btn-filter" style="padding: 6px 14px; font-size: 12px;">Weekly</button>
-                    </div>
-                </div>
 
-                <div class="analytics-grid">
-                    <!-- Progress Breakdown Card -->
-                    <div class="analytics-card" id="analyticsProgressCard">
-                        <!-- Populated by main.js -->
-                    </div>
-
-                    <!-- Live Site Telemetry Card -->
-                    <div class="analytics-card" id="analyticsTelemetryCard">
-                        <!-- Populated by main.js -->
-                    </div>
-                </div>
-            </section>
         </main>
 
         <!-- DASHBOARD FOOTER -->
@@ -208,14 +186,14 @@
     </div>
 
     <!-- AI MODULE SCRIPTS -->
-    <script src="ai/config.js?v=5.0"></script>
-    <script src="ai/ollama_client.js?v=5.0"></script>
-    <script src="ai/prompt_manager.js?v=5.0"></script>
-    <script src="ai/utils.js?v=5.0"></script>
-    <script src="ai/ai_service.js?v=5.0"></script>
+    <script src="ai/config.js?v=4.0"></script>
+    <script src="ai/ollama_client.js?v=4.0"></script>
+    <script src="ai/prompt_manager.js?v=4.0"></script>
+    <script src="ai/utils.js?v=4.0"></script>
+    <script src="ai/ai_service.js?v=4.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=5.0"></script>
-    <script src="js/main.js?v=5.0"></script>
+    <script src="js/data.js?v=4.0"></script>
+    <script src="js/main.js?v=4.0"></script>
 </body>
 </html>
