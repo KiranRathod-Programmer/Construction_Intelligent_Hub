@@ -18,3 +18,7 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+repopack-output.txt
+
+TECH_STACK_DOCUMENTATION.md
