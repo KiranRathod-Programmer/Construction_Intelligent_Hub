@@ -2027,6 +2027,391 @@ body::after {
 
 
 
+/* ===================================================================
+   MATERIAL ESTIMATOR — CONVERSATIONAL WIZARD STYLES
+   =================================================================== */
 
+/* Override modal max-width for the wider wizard */
+.mat-wizard-modal {
+    max-width: 720px;
+    width: 95vw;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 28px 32px;
+}
 
+/* Wizard Header */
+.mat-wizard-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
 
+.mat-wizard-header-icon {
+    font-size: 36px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid #BFDBFE;
+}
+
+.mat-wizard-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0F172A;
+    margin: 0 0 4px;
+}
+
+.mat-wizard-subtitle {
+    font-size: 13px;
+    color: #64748B;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* AI intro message bubble */
+.mat-wizard-ai-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+    border: 1px solid #BBF7D0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 22px;
+    font-size: 13.5px;
+    color: #14532D;
+    line-height: 1.6;
+}
+
+.mat-wizard-ai-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    background: #10B981;
+    border-radius: 50%;
+    margin-top: 5px;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    animation: wizPulse 2s infinite;
+}
+
+@keyframes wizPulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+    50%       { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.08); }
+}
+
+.mat-wizard-ai-message p { margin: 0; }
+
+/* Question form container */
+.mat-wizard-form {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+/* Individual question block */
+.mat-wizard-question {
+    background: #FAFAFA;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    transition: border-color 0.2s;
+}
+
+.mat-wizard-question:focus-within {
+    border-color: #93C5FD;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.07);
+}
+
+/* Numbered question label */
+.mat-wizard-q-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0F172A;
+    margin-bottom: 12px;
+}
+
+.mat-wizard-q-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563EB, #1D4ED8);
+    color: #FFF;
+    font-size: 12px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Input override inside wizard */
+.mat-wizard-input {
+    margin-top: 0;
+    background: #FFFFFF;
+    border-color: #CBD5E1;
+}
+
+.mat-wizard-input:focus {
+    border-color: #2563EB;
+}
+
+.mat-wizard-input-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* Side-by-side row layout */
+.mat-wizard-row {
+    display: flex;
+    gap: 14px;
+}
+
+/* Hint text */
+.mat-wizard-hint {
+    font-size: 12px;
+    color: #94A3B8;
+    margin-top: 7px;
+    line-height: 1.4;
+}
+
+/* Option card grids */
+.mat-wizard-option-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+}
+
+.mat-wizard-option-grid-5 {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.mat-wizard-option-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* Option card button */
+.mat-wizard-opt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 10px 6px;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    font-size: 20px;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    line-height: 1.2;
+}
+
+.mat-wizard-opt span {
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+    text-align: center;
+}
+
+.mat-wizard-opt:hover {
+    border-color: #93C5FD;
+    background: #EFF6FF;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+}
+
+.mat-wizard-opt:hover span {
+    color: #1D4ED8;
+}
+
+.mat-wizard-opt.selected {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    border-color: #1D4ED8;
+    color: #FFFFFF;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transform: translateY(-2px);
+}
+
+.mat-wizard-opt.selected span {
+    color: #FFFFFF;
+}
+
+/* Quality cards — taller variant with description */
+.mat-wizard-opt-quality {
+    padding: 14px 12px;
+    gap: 4px;
+    align-items: flex-start;
+    text-align: left;
+}
+
+.mat-quality-icon {
+    font-size: 18px;
+    margin-bottom: 2px;
+}
+
+.mat-quality-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0F172A;
+}
+
+.mat-wizard-opt-quality.selected .mat-quality-name,
+.mat-wizard-opt-quality.selected .mat-quality-desc {
+    color: #FFFFFF;
+}
+
+.mat-quality-desc {
+    font-size: 11px;
+    color: #64748B;
+    line-height: 1.4;
+    white-space: normal;
+}
+
+/* Floors stepper */
+.mat-wizard-stepper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #FFFFFF;
+}
+
+.mat-stepper-btn {
+    width: 38px;
+    height: 42px;
+    background: #F8FAFC;
+    border: none;
+    font-size: 18px;
+    font-weight: 700;
+    color: #475569;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.mat-stepper-btn:hover {
+    background: #EFF6FF;
+    color: #2563EB;
+}
+
+.mat-stepper-input {
+    flex: 1;
+    border: none !important;
+    border-radius: 0 !important;
+    text-align: center;
+    font-weight: 800;
+    font-size: 16px;
+    padding: 10px 0;
+    box-shadow: none !important;
+    outline: none !important;
+    background: #FFFFFF !important;
+}
+
+.mat-wizard-floors-hint {
+    font-size: 11.5px;
+    color: #2563EB;
+    font-weight: 700;
+    margin-top: 6px;
+    text-align: center;
+}
+
+/* Wizard Footer */
+.mat-wizard-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #E2E8F0;
+    flex-wrap: wrap;
+}
+
+.mat-wizard-footer-hint {
+    font-size: 12px;
+    color: #94A3B8;
+    flex: 1;
+    min-width: 200px;
+}
+
+/* Submit button */
+.mat-wizard-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 26px;
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 12px;
+    font-size: 14.5px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
+    white-space: nowrap;
+}
+
+.mat-wizard-submit-btn:hover {
+    background: linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45);
+}
+
+.mat-wizard-submit-btn:active {
+    transform: translateY(0);
+}
+
+.mat-wizard-btn-icon {
+    font-size: 18px;
+    animation: rocketBounce 1.8s ease-in-out infinite;
+}
+
+@keyframes rocketBounce {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-3px); }
+}
+
+/* Responsive: stack on small screens */
+@media (max-width: 600px) {
+    .mat-wizard-option-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .mat-wizard-option-grid-5 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .mat-wizard-option-grid-3 {
+        grid-template-columns: 1fr;
+    }
+    .mat-wizard-row {
+        flex-direction: column;
+    }
+    .mat-wizard-modal {
+        padding: 20px 16px;
+    }
+    .mat-wizard-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .mat-wizard-submit-btn {
+        justify-content: center;
+    }
+}

@@ -1339,56 +1339,148 @@ function closeMaterialEstimate() {
     if (outputBox) outputBox.style.display = 'none';
 }
 
-async function triggerMaterialAIEstimate() {
-    const projSelect      = document.getElementById('aiMatProjectSelect');
-    const locInput        = document.getElementById('aiMatLocation');
-    const pTypeSelect     = document.getElementById('aiMatProjectType');
-    const bTypeSelect     = document.getElementById('aiMatBuildingType');
-    const areaInput       = document.getElementById('aiMatAreaSqFt');
-    const floorsInput     = document.getElementById('aiMatFloors');
-    const soilSelect      = document.getElementById('aiMatSoilType');
-    const foundationSelect= document.getElementById('aiMatFoundation');
-    const mixRatioSelect  = document.getElementById('aiMatMixRatio');
-    const unitSystemSelect= document.getElementById('aiMatUnitSystem');
-    const outputBox       = document.getElementById('aiMatOutputBox');
-    const outputContainer = document.getElementById('aiMatOutputContainer');
+/**
+ * Wizard helper: selects an option card and writes value to a hidden input.
+ */
+function selectWizardOption(btn, gridId, hiddenInputId) {
+    const grid = document.getElementById(gridId);
+    if (grid) {
+        grid.querySelectorAll('.mat-wizard-opt').forEach(b => b.classList.remove('selected'));
+    }
+    btn.classList.add('selected');
+    const hiddenEl = document.getElementById(hiddenInputId);
+    if (hiddenEl) hiddenEl.value = btn.getAttribute('data-value') || btn.dataset.value || '';
+}
 
-    const projName   = projSelect       ? projSelect.value         : 'Delhi Metro - Phase 4';
-    const location   = (locInput && locInput.value.trim()) ? locInput.value.trim() : 'Project Site Zone';
-    const pType      = pTypeSelect      ? pTypeSelect.value        : 'Commercial Office Hub';
-    const bType      = bTypeSelect      ? bTypeSelect.value        : 'RCC Frame Structure';
-    const areaSqFt   = parseFloat(areaInput   ? areaInput.value   : 50000) || 50000;
-    const numFloors  = parseInt(floorsInput    ? floorsInput.value : 12, 10) || 12;
-    const soil       = soilSelect       ? soilSelect.value         : 'Clayey Soil (High Plasticity)';
-    const foundation = foundationSelect ? foundationSelect.value   : 'Raft / Mat Foundation';
-    const mixRatio   = mixRatioSelect   ? mixRatioSelect.value     : 'M25 (1:1:2)';
-    const unitSystem = unitSystemSelect ? unitSystemSelect.value   : 'Metric (SI Units)';
-    const totalAreaSqFt = areaSqFt * Math.max(1, Math.min(numFloors, 100));
+/**
+ * Wizard helper: increment/decrement floors stepper.
+ */
+function changeFloors(delta) {
+    const input = document.getElementById('wizMatFloors');
+    const hint  = document.getElementById('wizFloorsHint');
+    if (!input) return;
+    let val = parseInt(input.value, 10) || 1;
+    val = Math.max(1, Math.min(100, val + delta));
+    input.value = val;
+    if (hint) {
+        if (val === 1) hint.textContent = 'Ground Floor (G)';
+        else if (val === 2) hint.textContent = 'G + 1 Floor';
+        else hint.textContent = `G + ${val - 1} Floors`;
+    }
+}
 
-    const materialData = {
-        projectName: projName, projName, location,
-        projectType: pType, pType,
-        buildingType: bType, bType,
-        areaSqFt, numFloors, totalAreaSqFt,
-        soil, foundation, mixRatio, unitSystem,
-        wastageBuffer: '8%'
+/**
+ * Derives technical construction params from the 6 conversational wizard answers.
+ * Maps user-friendly choices → engineering specs needed by the prompt engine.
+ */
+function deriveWizardParams(projName, projType, areaSqFt, numFloors, location, soilType, quality) {
+    // Building type derivation
+    const buildingTypeMap = {
+        'Residential':    'RCC Frame Structure',
+        'Commercial':     'RCC Frame Structure',
+        'Industrial':     'Structural Steel Frame',
+        'Infrastructure': 'Hybrid Composite Structure',
+        'Institutional':  'RCC Frame Structure',
+        'Other':          'RCC Frame Structure'
     };
 
+    // Foundation type derivation
+    const foundationMap = {
+        'Residential':    'Isolated Footings',
+        'Commercial':     'Raft / Mat Foundation',
+        'Industrial':     'Deep Pile Foundation',
+        'Infrastructure': 'Deep Pile Foundation',
+        'Institutional':  'Raft / Mat Foundation',
+        'Other':          'Isolated Footings'
+    };
+
+    // Concrete mix & wastage from quality
+    const qualityMap = {
+        'Standard': { mixRatio: 'M20 (1:1.5:3)', wastageBuffer: '8%' },
+        'Premium':  { mixRatio: 'M25 (1:1:2)',   wastageBuffer: '10%' },
+        'Custom':   { mixRatio: 'M30 (1:0.75:1.5)', wastageBuffer: '12%' }
+    };
+
+    const bType      = buildingTypeMap[projType]  || 'RCC Frame Structure';
+    const foundation = foundationMap[projType]    || 'Raft / Mat Foundation';
+    const qSpec      = qualityMap[quality]        || qualityMap['Standard'];
+    const totalAreaSqFt = areaSqFt * Math.max(1, Math.min(numFloors, 100));
+
+    return {
+        projectName: projName, projName,
+        location,
+        projectType: projType, pType: projType,
+        buildingType: bType,   bType,
+        areaSqFt, numFloors, totalAreaSqFt,
+        soil: soilType,
+        foundation,
+        mixRatio:      qSpec.mixRatio,
+        wastageBuffer: qSpec.wastageBuffer,
+        unitSystem: 'Metric (SI Units)'
+    };
+}
+
+/**
+ * Validates wizard inputs and submits estimate.
+ * Called by "Generate Material Estimate" button.
+ */
+async function submitMaterialWizard() {
+    // --- Read wizard fields ---
+    const projName  = (document.getElementById('wizMatProjectName')?.value || '').trim();
+    const projType  = document.getElementById('wizMatProjectType')?.value  || '';
+    const areaSqFt  = parseFloat(document.getElementById('wizMatAreaSqFt')?.value  || '0');
+    const numFloors = parseInt(document.getElementById('wizMatFloors')?.value || '1', 10);
+    const location  = (document.getElementById('wizMatLocation')?.value || '').trim();
+    const soilType  = document.getElementById('wizMatSoilType')?.value  || '';
+    const quality   = document.getElementById('wizMatQuality')?.value   || '';
+
+    // --- Validation ---
+    const errors = [];
+    if (!projName)          errors.push('Project name (Q1)');
+    if (!projType)          errors.push('Project type (Q2)');
+    if (!areaSqFt || areaSqFt < 50) errors.push('Construction area — minimum 50 sq.ft (Q3)');
+    if (!location)          errors.push('Site location (Q4)');
+    if (!soilType)          errors.push('Soil type (Q5)');
+    if (!quality)           errors.push('Construction quality (Q6)');
+
+    if (errors.length > 0) {
+        // Highlight the submit button briefly to indicate error
+        const btn = document.getElementById('matWizardSubmitBtn');
+        if (btn) {
+            btn.style.background = '#EF4444';
+            btn.textContent = '⚠️ Please fill: ' + errors.join(', ');
+            setTimeout(() => {
+                btn.style.background = '';
+                btn.innerHTML = '<span class="mat-wizard-btn-icon">🚀</span> Generate Material Estimate';
+            }, 3500);
+        }
+        return;
+    }
+
+    // --- Derive technical params ---
+    const materialData = deriveWizardParams(projName, projType, areaSqFt, numFloors, location, soilType, quality);
+
+    // --- Close wizard modal, show output area ---
     closeModal('materialEstimatorModal');
-    if (outputContainer) { 
-        outputContainer.style.display = 'block'; 
-        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); 
+
+    const outputContainer = document.getElementById('aiMatOutputContainer');
+    const outputBox       = document.getElementById('aiMatOutputBox');
+
+    if (outputContainer) {
+        outputContainer.style.display = 'block';
+        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     if (!outputBox) return;
     outputBox.style.display = 'block';
 
-    // Simple, clean loading state
+    // --- Loading state ---
+    const totalSqFtDisplay = (areaSqFt * numFloors).toLocaleString('en-IN');
     outputBox.innerHTML = `
         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 32px 24px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
             <div class="cih-spinner" style="width: 40px; height: 40px; margin: 0 auto 16px; border: 3px solid #E2E8F0; border-top-color: #2563EB; border-radius: 50%; animation: cihSpin 0.8s linear infinite;"></div>
             <div style="font-size: 16px; font-weight: 700; color: #0F172A; margin-bottom: 6px;">🤖 Computing Material Quantities with Llama 3.2...</div>
             <div style="font-size: 13px; color: #64748B; max-width: 520px; margin: 0 auto 14px; line-height: 1.6;">
-                Calculating accurate BOQ, wastage buffers (8%), unit rates, and total budget for <strong>${projName}</strong> (${totalAreaSqFt.toLocaleString()} sq.ft built-up area).
+                Calculating accurate BOQ, wastage buffers (${materialData.wastageBuffer}), unit rates, and total budget for <strong>${projName}</strong> (${totalSqFtDisplay} sq.ft total built-up area).
             </div>
             <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #1D4ED8; background: #EFF6FF; border: 1px solid #BFDBFE; padding: 4px 12px; border-radius: 20px;">
                 <span style="background: #10B981; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>
@@ -1397,8 +1489,8 @@ async function triggerMaterialAIEstimate() {
         </div>`;
 
     try {
-        // Explicitly enforce llama3.2 model
-        const aiResult = await CIH_AI_SERVICE.estimateMaterials(materialData, "", "llama3.2");
+        // Call AI with derived params — enforcing llama3.2
+        const aiResult = await CIH_AI_SERVICE.estimateMaterials(materialData, '', 'llama3.2');
 
         currentMaterialEstimateData = {
             ...materialData,
@@ -1418,15 +1510,21 @@ async function triggerMaterialAIEstimate() {
                     <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: #B91C1C;">AI Estimation Notice</h4>
                 </div>
                 <p style="font-size: 13.5px; margin: 0 0 16px; color: #475569;">
-                    Llama 3.2 calculation encounter: <code>${err.message || 'Service offline'}</code>. You can retry with local fallback emulation.
+                    Llama 3.2 returned: <code>${err.message || 'Service offline'}</code>. Make sure Ollama is running on port 11434, then retry.
                 </p>
                 <div style="display: flex; gap: 8px;">
-                    <button class="btn-primary" style="font-size: 12.5px; padding: 7px 16px; background: #2563EB;" onclick="triggerMaterialAIEstimate()">🔄 Retry Llama 3.2</button>
+                    <button class="btn-primary" style="font-size: 12.5px; padding: 7px 16px; background: #2563EB;" onclick="openModal('materialEstimatorModal')">✏️ Edit & Retry</button>
                     <button class="btn-secondary" style="font-size: 12.5px; padding: 7px 14px;" onclick="closeMaterialEstimate()">✕ Dismiss</button>
                 </div>
             </div>`;
     }
 }
+
+// Legacy alias — kept so any direct calls still work
+async function triggerMaterialAIEstimate() {
+    await submitMaterialWizard();
+}
+
 
 /**
  * Renders a clean, simple, production-grade Material Estimate Output

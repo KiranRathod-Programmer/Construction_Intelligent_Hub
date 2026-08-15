@@ -154,90 +154,148 @@
         </footer>
     </div>
 
-    <!-- AI MATERIAL ESTIMATOR SPECIFICATION MODAL -->
+    <!-- AI MATERIAL ESTIMATOR — CONVERSATIONAL WIZARD MODAL -->
     <div class="modal-overlay" id="materialEstimatorModal">
-        <div class="modal-content" style="max-width: 650px;">
+        <div class="modal-content mat-wizard-modal">
             <button class="modal-close" onclick="closeModal('materialEstimatorModal')">✕</button>
-            <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">🏗️ Estimate Required Construction
-                Materials</h3>
-            <p style="font-size: 13px; color: #64748B; margin-bottom: 20px;">Provide construction details below. The AI
-                will estimate exact quantities for Cement, Steel, Sand, Bricks, Aggregate, Concrete, Tiles, Paint, and
-                key structural materials.</p>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                <div class="form-group">
-                    <label class="form-label">Project Site</label>
-                    <select class="form-input" id="aiMatProjectSelect">
-                        <option value="Delhi Metro - Phase 4">Delhi Metro - Phase 4</option>
-                        <option value="Mumbai Trans Harbour">Mumbai Trans Harbour</option>
-                        <option value="Indore Smart City Hub">Indore Smart City Hub</option>
-                        <option value="International Terminal Exp.">International Terminal Exp.</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Location (Optional)</label>
-                    <input type="text" class="form-input" id="aiMatLocation" placeholder="e.g. Zone 4, New Delhi">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Project Type *</label>
-                    <select class="form-input" id="aiMatProjectType">
-                        <option value="Residential High-Rise">Residential High-Rise</option>
-                        <option value="Commercial Office Hub">Commercial Office Hub</option>
-                        <option value="Industrial Warehouse">Industrial Warehouse</option>
-                        <option value="Highway & Infrastructure">Highway & Infrastructure</option>
-                        <option value="Bridge & Flyover">Bridge & Flyover</option>
-                        <option value="Institutional / Campus">Institutional / Campus</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Building Type *</label>
-                    <select class="form-input" id="aiMatBuildingType">
-                        <option value="RCC Frame Structure">RCC Frame Structure</option>
-                        <option value="Structural Steel Frame">Structural Steel Frame</option>
-                        <option value="Hybrid Composite Structure">Hybrid Composite Structure</option>
-                        <option value="Pre-cast Concrete Module">Pre-cast Concrete Module</option>
-                        <option value="Load Bearing Masonry">Load Bearing Masonry</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Construction Area (Square Feet) *</label>
-                    <input type="number" class="form-input" id="aiMatAreaSqFt" placeholder="e.g. 50000" value="50000">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Number of Floors *</label>
-                    <input type="number" class="form-input" id="aiMatFloors" placeholder="e.g. 12" value="12">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Soil Type *</label>
-                    <select class="form-input" id="aiMatSoilType">
-                        <option value="Clayey Soil (High Plasticity)">Clayey Soil (High Plasticity)</option>
-                        <option value="Sandy Soil (Coarse Grained)">Sandy Soil (Coarse Grained)</option>
-                        <option value="Black Cotton Soil (Expansive)">Black Cotton Soil (Expansive)</option>
-                        <option value="Hard Rock / Bedrock">Hard Rock / Bedrock</option>
-                        <option value="Sandy Loam / Silt">Sandy Loam / Silt</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Foundation Type *</label>
-                    <select class="form-input" id="aiMatFoundation">
-                        <option value="Raft / Mat Foundation">Raft / Mat Foundation</option>
-                        <option value="Seismic Reinforced Concrete Footing">Seismic Reinforced Concrete Footing</option>
-                        <option value="Deep Pile Foundation">Deep Pile Foundation</option>
-                        <option value="Isolated Footings">Isolated Footings</option>
-                        <option value="Continuous Strip Footing">Continuous Strip Footing</option>
-                    </select>
+            <!-- Wizard Header -->
+            <div class="mat-wizard-header">
+                <div class="mat-wizard-header-icon">🤖</div>
+                <div>
+                    <h3 class="mat-wizard-title">AI Material Estimator</h3>
+                    <p class="mat-wizard-subtitle">Powered by Llama 3.2 · Answer the questions below and the AI will calculate your complete material BOQ.</p>
                 </div>
             </div>
 
-            <button class="btn-primary" style="width: 100%; justify-content: center; margin-top: 14px; padding: 12px;"
-                onclick="triggerMaterialAIEstimate()">Calculate AI Material Quantities</button>
+            <!-- AI Intro Message -->
+            <div class="mat-wizard-ai-message">
+                <span class="mat-wizard-ai-dot"></span>
+                <p>Hello! I'm your CIH Material AI — a Senior Quantity Surveyor powered by <strong>Llama 3.2</strong>. Tell me about your construction project and I'll estimate every material you need with quantities, wastage buffers, and INR costs.</p>
+            </div>
+
+            <!-- Question Form — all questions visible, conversational card layout -->
+            <div class="mat-wizard-form">
+
+                <!-- Q1: Project Name -->
+                <div class="mat-wizard-question">
+                    <div class="mat-wizard-q-label">
+                        <span class="mat-wizard-q-num">1</span>
+                        <span>What is the name or description of your project?</span>
+                    </div>
+                    <input type="text" class="form-input mat-wizard-input" id="wizMatProjectName"
+                        placeholder="e.g. My Villa in Pune, Tech Park Block B, Warehouse Sector 5…"
+                        autocomplete="off">
+                </div>
+
+                <!-- Q2: Project Type -->
+                <div class="mat-wizard-question">
+                    <div class="mat-wizard-q-label">
+                        <span class="mat-wizard-q-num">2</span>
+                        <span>What type of construction is this?</span>
+                    </div>
+                    <div class="mat-wizard-option-grid" id="wizProjectTypeGrid">
+                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Residential" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏠<br><span>Residential</span></button>
+                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Commercial" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏢<br><span>Commercial</span></button>
+                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Industrial" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏭<br><span>Industrial</span></button>
+                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Infrastructure" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🌉<br><span>Infrastructure</span></button>
+                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Institutional" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏫<br><span>Institutional</span></button>
+                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Other" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🔧<br><span>Other</span></button>
+                    </div>
+                    <input type="hidden" id="wizMatProjectType" value="">
+                </div>
+
+                <!-- Q3: Area + Floors -->
+                <div class="mat-wizard-question">
+                    <div class="mat-wizard-q-label">
+                        <span class="mat-wizard-q-num">3</span>
+                        <span>What is the construction area and number of floors?</span>
+                    </div>
+                    <div class="mat-wizard-row">
+                        <div style="flex:1;">
+                            <label class="mat-wizard-input-label">Area (Square Feet)</label>
+                            <input type="number" class="form-input mat-wizard-input" id="wizMatAreaSqFt"
+                                placeholder="e.g. 1500" min="100">
+                        </div>
+                        <div style="flex:1;">
+                            <label class="mat-wizard-input-label">Number of Floors</label>
+                            <div class="mat-wizard-stepper">
+                                <button type="button" class="mat-stepper-btn" onclick="changeFloors(-1)">−</button>
+                                <input type="number" class="form-input mat-wizard-input mat-stepper-input" id="wizMatFloors" value="1" min="1" max="100" readonly>
+                                <button type="button" class="mat-stepper-btn" onclick="changeFloors(1)">+</button>
+                            </div>
+                            <div class="mat-wizard-floors-hint" id="wizFloorsHint">Ground Floor (G)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q4: Location -->
+                <div class="mat-wizard-question">
+                    <div class="mat-wizard-q-label">
+                        <span class="mat-wizard-q-num">4</span>
+                        <span>Where is the construction site located?</span>
+                    </div>
+                    <input type="text" class="form-input mat-wizard-input" id="wizMatLocation"
+                        placeholder="e.g. Baner, Pune · Whitefield, Bangalore · Dubai Marina…"
+                        autocomplete="off">
+                    <div class="mat-wizard-hint">Location helps the AI consider local construction norms and material availability.</div>
+                </div>
+
+                <!-- Q5: Soil Type -->
+                <div class="mat-wizard-question">
+                    <div class="mat-wizard-q-label">
+                        <span class="mat-wizard-q-num">5</span>
+                        <span>What is the soil type at the site?</span>
+                    </div>
+                    <div class="mat-wizard-option-grid mat-wizard-option-grid-5" id="wizSoilTypeGrid">
+                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Sandy Soil (Coarse Grained)">🏖️<br><span>Sandy</span></button>
+                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Clayey Soil (High Plasticity)">🟫<br><span>Clay</span></button>
+                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Hard Rock / Bedrock">🪨<br><span>Rocky</span></button>
+                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Sandy Loam / Silt">🌱<br><span>Loamy</span></button>
+                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Clayey Soil (High Plasticity)">❓<br><span>Unknown</span></button>
+                    </div>
+                    <input type="hidden" id="wizMatSoilType" value="">
+                </div>
+
+                <!-- Q6: Construction Quality -->
+                <div class="mat-wizard-question">
+                    <div class="mat-wizard-q-label">
+                        <span class="mat-wizard-q-num">6</span>
+                        <span>What is the desired construction quality / specification?</span>
+                    </div>
+                    <div class="mat-wizard-option-grid mat-wizard-option-grid-3" id="wizQualityGrid">
+                        <button class="mat-wizard-opt mat-wizard-opt-quality" onclick="selectWizardOption(this, 'wizQualityGrid', 'wizMatQuality')" data-value="Standard">
+                            <div class="mat-quality-icon">⭐</div>
+                            <div class="mat-quality-name">Standard</div>
+                            <div class="mat-quality-desc">M20 mix · 8% wastage · cost-effective build</div>
+                        </button>
+                        <button class="mat-wizard-opt mat-wizard-opt-quality" onclick="selectWizardOption(this, 'wizQualityGrid', 'wizMatQuality')" data-value="Premium">
+                            <div class="mat-quality-icon">⭐⭐</div>
+                            <div class="mat-quality-name">Premium</div>
+                            <div class="mat-quality-desc">M25 mix · 10% wastage · high-grade finishes</div>
+                        </button>
+                        <button class="mat-wizard-opt mat-wizard-opt-quality" onclick="selectWizardOption(this, 'wizQualityGrid', 'wizMatQuality')" data-value="Custom">
+                            <div class="mat-quality-icon">🛠️</div>
+                            <div class="mat-quality-name">Custom</div>
+                            <div class="mat-quality-desc">M30+ mix · 12% wastage · bespoke specs</div>
+                        </button>
+                    </div>
+                    <input type="hidden" id="wizMatQuality" value="">
+                </div>
+
+            </div><!-- end mat-wizard-form -->
+
+            <!-- Generate Button -->
+            <div class="mat-wizard-footer">
+                <div class="mat-wizard-footer-hint">
+                    🔒 All AI processing runs locally via <strong>Ollama · Llama 3.2</strong> — no data leaves your device.
+                </div>
+                <button class="mat-wizard-submit-btn" id="matWizardSubmitBtn" onclick="submitMaterialWizard()">
+                    <span class="mat-wizard-btn-icon">🚀</span>
+                    Generate Material Estimate
+                </button>
+            </div>
+
         </div>
     </div>
 
