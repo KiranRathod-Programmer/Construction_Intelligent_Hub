@@ -3,18 +3,41 @@
  * 
  * Low-level HTTP fetch wrapper for local Ollama endpoints.
  * Completely offline with no cloud or third-party dependencies.
+ * Default Primary Model: Llama 3.2 (llama3.2)
  */
 
 const OllamaClient = {
     /**
+     * Get active Ollama daemon base URL endpoint
+     */
+    getEndpoint: () => {
+        if (typeof OLLAMA_CONFIG !== 'undefined') {
+            return OLLAMA_CONFIG.ollamaBaseUrl || OLLAMA_CONFIG.endpoint || "http://localhost:11434";
+        }
+        return "http://localhost:11434";
+    },
+
+    /**
+     * Get default / active model name (defaults to "llama3.2")
+     */
+    getDefaultModel: () => {
+        if (typeof OLLAMA_CONFIG !== 'undefined') {
+            return OLLAMA_CONFIG.defaultModel || OLLAMA_CONFIG.activeModel || OLLAMA_CONFIG.model || "llama3.2";
+        }
+        return "llama3.2";
+    },
+
+    /**
      * Check if local Ollama daemon is active and serving model
      */
-    checkHealth: async () => {
+    checkHealth: async (baseUrl) => {
+        const endpoint = baseUrl || OllamaClient.getEndpoint();
+        const timeout = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.healthCheckTimeoutMs) ? OLLAMA_CONFIG.healthCheckTimeoutMs : 1500;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), OLLAMA_CONFIG.healthCheckTimeoutMs || 1500);
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-            const response = await fetch(`${OLLAMA_CONFIG.endpoint}/api/tags`, {
+            const response = await fetch(`${endpoint}/api/tags`, {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
@@ -26,28 +49,34 @@ const OllamaClient = {
 
     /**
      * Send prompt to Ollama /api/generate endpoint
+     * Defaults to Llama 3.2 (llama3.2)
      */
-    generate: async (prompt, systemPrompt = "") => {
-        const isHealthy = await OllamaClient.checkHealth();
+    generate: async (prompt, systemPrompt = "", modelName = "") => {
+        const endpoint = OllamaClient.getEndpoint();
+        const activeModel = modelName || OllamaClient.getDefaultModel();
+        const isHealthy = await OllamaClient.checkHealth(endpoint);
 
-        if (!isHealthy && OLLAMA_CONFIG.fallbackEnabled) {
-            console.warn("[CIH AI Engine] Local Ollama daemon unreachable at " + OLLAMA_CONFIG.endpoint + ". Utilizing local fallback engine.");
+        if (!isHealthy && (typeof OLLAMA_CONFIG === 'undefined' || OLLAMA_CONFIG.fallbackEnabled)) {
+            console.warn(`[CIH AI Engine] Local Ollama daemon unreachable at ${endpoint}. Utilizing local fallback engine (Llama 3.2 emulation).`);
             return OllamaClient._getOfflineFallbackResponse(prompt);
         }
 
         try {
+            const timeout = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.timeoutMs) ? OLLAMA_CONFIG.timeoutMs : 35000;
+            const options = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.options) ? OLLAMA_CONFIG.options : { temperature: 0.7, top_p: 0.9, num_predict: 800 };
+            
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), OLLAMA_CONFIG.timeoutMs || 35000);
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             const payload = {
-                model: OLLAMA_CONFIG.model,
+                model: activeModel,
                 prompt: prompt,
                 system: systemPrompt || CIH_PROMPTS.systemPrompt,
                 stream: false,
-                options: OLLAMA_CONFIG.options
+                options: options
             };
 
-            const response = await fetch(`${OLLAMA_CONFIG.endpoint}/api/generate`, {
+            const response = await fetch(`${endpoint}/api/generate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -63,17 +92,20 @@ const OllamaClient = {
             const data = await response.json();
             return data.response;
         } catch (err) {
-            console.warn("[CIH AI Engine] Ollama request failed or timed out. Falling back to local AI engine.", err);
+            console.warn("[CIH AI Engine] Ollama request failed or timed out. Falling back to local Llama 3.2 fallback engine.", err);
             return OllamaClient._getOfflineFallbackResponse(prompt);
         }
     },
 
     /**
      * Send message history to Ollama /api/chat endpoint
+     * Defaults to Llama 3.2 (llama3.2)
      */
-    chat: async (messages, originalUserMsg = "") => {
+    chat: async (messages, originalUserMsg = "", modelName = "") => {
+        const endpoint = OllamaClient.getEndpoint();
+        const activeModel = modelName || OllamaClient.getDefaultModel();
         const queryText = originalUserMsg || (messages.length ? messages[messages.length - 1].content : "");
-        const isHealthy = await OllamaClient.checkHealth();
+        const isHealthy = await OllamaClient.checkHealth(endpoint);
 
         // Inject System Prompt at the beginning if not already present
         const fullMessages = [...messages];
@@ -84,22 +116,25 @@ const OllamaClient = {
             });
         }
 
-        if (!isHealthy && OLLAMA_CONFIG.fallbackEnabled) {
+        if (!isHealthy && (typeof OLLAMA_CONFIG === 'undefined' || OLLAMA_CONFIG.fallbackEnabled)) {
             return OllamaClient._getOfflineFallbackResponse(queryText, fullMessages);
         }
 
         try {
+            const timeout = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.timeoutMs) ? OLLAMA_CONFIG.timeoutMs : 35000;
+            const options = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.options) ? OLLAMA_CONFIG.options : { temperature: 0.7, top_p: 0.9, num_predict: 800 };
+
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), OLLAMA_CONFIG.timeoutMs || 35000);
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             const payload = {
-                model: OLLAMA_CONFIG.model,
+                model: activeModel,
                 messages: fullMessages,
                 stream: false,
-                options: OLLAMA_CONFIG.options
+                options: options
             };
 
-            const response = await fetch(`${OLLAMA_CONFIG.endpoint}/api/chat`, {
+            const response = await fetch(`${endpoint}/api/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -115,17 +150,158 @@ const OllamaClient = {
             const data = await response.json();
             return data.message.content;
         } catch (err) {
-            console.warn("[CIH Chat] Request timed out or Ollama offline. Utilizing local dynamic AI engine.", err);
+            console.warn("[CIH Chat] Request timed out or Ollama offline. Utilizing local dynamic Llama 3.2 AI engine.", err);
             return OllamaClient._getOfflineFallbackResponse(queryText, fullMessages);
         }
     },
 
     /**
-     * Dynamic & Conversational Local Fallback Knowledge Engine when Ollama is offline
+     * Dynamic & Conversational Local Fallback Knowledge Engine when Ollama is offline (Llama 3.2 heuristic mode)
      */
     _getOfflineFallbackResponse: (prompt, history = []) => {
         const lower = (prompt || "").toLowerCase().trim();
         const dataset = (typeof CIH_DATASET !== 'undefined') ? CIH_DATASET : null;
+
+        // 0. MATERIAL ESTIMATION & QUANTITY SURVEYING PROMPT
+        if (lower.includes("cih material ai") || lower.includes("material estimation report") || lower.includes("material requirement breakdown") || lower.includes("tasks: estimate material quantities")) {
+            // Extract parameters from prompt text if available
+            const projMatch = prompt.match(/Project:\s*([^|\n]+)/i);
+            const pTypeMatch = prompt.match(/Sector:\s*([^|\n]+)/i) || prompt.match(/Project Category:\s*([^|\n]+)/i);
+            const bTypeMatch = prompt.match(/Structure:\s*([^|\n]+)/i) || prompt.match(/Building System:\s*([^|\n]+)/i);
+            const areaMatch = prompt.match(/Base Area:\s*([\d,]+)/i) || prompt.match(/areaSqFt:\s*([\d,]+)/i);
+            const floorsMatch = prompt.match(/Floors:\s*(\d+)/i) || prompt.match(/numFloors:\s*(\d+)/i);
+            const mixMatch = prompt.match(/Concrete Mix:\s*([^|\n]+)/i);
+            const soilMatch = prompt.match(/Soil:\s*([^|\n]+)/i);
+            const foundMatch = prompt.match(/Foundation:\s*([^|\n]+)/i);
+
+            const projName = projMatch ? projMatch[1].trim() : "Active Infrastructure Site";
+            const pType = pTypeMatch ? pTypeMatch[1].trim() : "Commercial Infrastructure";
+            const bType = bTypeMatch ? bTypeMatch[1].trim() : "RCC Frame Structure";
+            const baseArea = areaMatch ? parseInt(areaMatch[1].replace(/,/g, ''), 10) || 50000 : 50000;
+            const floors = floorsMatch ? parseInt(floorsMatch[1], 10) || 12 : 12;
+            const totalAreaSqFt = baseArea * floors;
+            const totalSqM = Math.round(totalAreaSqFt / 10.764);
+            const mixRatio = mixMatch ? mixMatch[1].trim() : "M25 (1:1:2)";
+            const soil = soilMatch ? soilMatch[1].trim() : "Clayey Soil (High Plasticity)";
+            const foundation = foundMatch ? foundMatch[1].trim() : "Raft / Mat Foundation";
+
+            // Engineering Quantities Calculation
+            const concreteM3Net = Math.round(totalSqM * 0.15 * 1.3);
+            const concreteM3Wastage = Math.round(concreteM3Net * 0.08);
+            const concreteM3Total = concreteM3Net + concreteM3Wastage;
+            const concreteCost = concreteM3Total * 6200;
+
+            const cementBagsNet = Math.round(concreteM3Net * 7.5);
+            const cementBagsWastage = Math.round(cementBagsNet * 0.08);
+            const cementBagsTotal = cementBagsNet + cementBagsWastage;
+            const cementCost = cementBagsTotal * 410;
+
+            const steelMTNet = Math.round(concreteM3Net * 0.11);
+            const steelMTWastage = Math.max(1, Math.round(steelMTNet * 0.08));
+            const steelMTTotal = steelMTNet + steelMTWastage;
+            const steelCost = steelMTTotal * 63500;
+
+            const sandCuFtNet = Math.round(totalAreaSqFt * 0.25);
+            const sandCuFtWastage = Math.round(sandCuFtNet * 0.08);
+            const sandCuFtTotal = sandCuFtNet + sandCuFtWastage;
+            const sandCost = sandCuFtTotal * 55;
+
+            const aggCuFtNet = Math.round(totalAreaSqFt * 0.36);
+            const aggCuFtWastage = Math.round(aggCuFtNet * 0.08);
+            const aggCuFtTotal = aggCuFtNet + aggCuFtWastage;
+            const aggCost = aggCuFtTotal * 42;
+
+            const extPaintNet = Math.round(totalAreaSqFt * 0.05);
+            const intPaintNet = Math.round(totalAreaSqFt * 0.12);
+            const paintTotalLit = extPaintNet + intPaintNet;
+            const paintCost = Math.round(paintTotalLit * 380);
+
+            const wpLitres = Math.round(totalAreaSqFt * 0.008);
+            const wpCost = wpLitres * 680;
+
+            const grandTotalCost = concreteCost + cementCost + steelCost + sandCost + aggCost + paintCost + wpCost;
+
+            const fmtInr = (n) => n.toLocaleString('en-IN');
+
+            return `# 🏗️ Material Estimation Report — ${projName}
+
+I have completed the Quantity Survey and Material Estimation analysis for your **${baseArea.toLocaleString()} sq. ft. ${pType} Project** (${bType}, ${floors} Floors). Below is the detailed material requirement breakdown:
+
+---
+
+## 🧱 Cement
+
+**Quantity:** ${fmtInr(cementBagsTotal)} Bags (${fmtInr(cementBagsNet)} net requirement + ${fmtInr(cementBagsWastage)} bags wastage allowance)
+**Grade:** OPC 53 / PPC (IS 8112) — recommended for structural slab casting, shear walls, and high-adhesion masonry.
+**Estimated Cost:** ₹${fmtInr(cementCost)} (@ ₹410 / bag)
+
+---
+
+## 🪨 Ready-Mix Concrete (${mixRatio})
+
+**Quantity:** ${fmtInr(concreteM3Total)} Cubic Meters (${fmtInr(concreteM3Net)} net requirement + ${fmtInr(concreteM3Wastage)} cu. m wastage allowance)
+**Grade:** ${mixRatio} — batching designed for high compressive strength columns, tie-beams, and suspended floor slabs.
+**Estimated Cost:** ₹${fmtInr(concreteCost)} (@ ₹6,200 / cu. m)
+
+---
+
+## 🔩 Steel Rebar (Fe 500D TMT)
+
+**Quantity:** ${fmtInr(steelMTTotal)} Metric Tons (${fmtInr(steelMTNet)} net requirement + ${fmtInr(steelMTWastage)} MT wastage allowance)
+**Grade:** Fe500D IS 1786 — high-ductility seismic grade rebar for load-bearing columns, footings, and structural slabs.
+**Estimated Cost:** ₹${fmtInr(steelCost)} (@ ₹63,500 / MT)
+
+---
+
+## 🪣 River Sand / Manufactured Sand (M-Sand)
+
+**Quantity:** ${fmtInr(sandCuFtTotal)} Cubic Feet (${fmtInr(sandCuFtNet)} net requirement + ${fmtInr(sandCuFtWastage)} cu. ft buffer)
+**Grade:** Zone-II Double-Washed M-Sand — optimal silt-free grading for RCC mix and internal/external wall plastering.
+**Estimated Cost:** ₹${fmtInr(sandCost)} (@ ₹55 / cu. ft)
+
+---
+
+## ⚙️ Coarse Aggregates (20mm)
+
+**Quantity:** ${fmtInr(aggCuFtTotal)} Cubic Feet (${fmtInr(aggCuFtNet)} net requirement + ${fmtInr(aggCuFtWastage)} cu. ft buffer)
+**Grade:** Angular 20mm & 10mm Graded Crushed Blue Metal Stone for high interlock structural concrete casting.
+**Estimated Cost:** ₹${fmtInr(aggCost)} (@ ₹42 / cu. ft)
+
+---
+
+## 🎨 Exterior and Interior Paint
+
+**Quantity:** ${fmtInr(paintTotalLit)} Litres Total (${fmtInr(extPaintNet)} L Exterior Acrylic + ${fmtInr(intPaintNet)} L Interior Emulsion)
+**Specification:** 1 coat alkali-resistant primer + 2 coats premium washable weather-shield acrylic emulsion.
+**Estimated Cost:** ₹${fmtInr(paintCost)}
+
+---
+
+## 💧 Waterproofing Compound
+
+**Quantity:** ${fmtInr(wpLitres)} Litres
+**Specification:** Polyurethane & Crystalline liquid membrane admixture for subterranean foundation footings and terrace level.
+**Estimated Cost:** ₹${fmtInr(wpCost)} (@ ₹680 / L)
+
+---
+
+## 💰 Grand Total Estimated Material Budget
+
+**₹${fmtInr(grandTotalCost)}** *(Includes 8% total site buffer and wastage allowance)*
+
+---
+
+## 📋 Executive Recommendations & Strategic Directives
+
+**1. Soil & Foundation Guidance:**
+Given the site profile of **${soil}** and **${foundation}**, plate load compaction tests must be certified before pouring **${fmtInr(concreteM3Total)} m³** of foundation concrete.
+
+**2. Phased Procurement of Steel:**
+Stage the **${fmtInr(steelMTTotal)} MT** of Fe500D TMT steel deliveries in bi-weekly batches matching construction milestone phases. Keep rebars on elevated timber runners to prevent moisture oxidation.
+
+**3. Storage and Moisture Management:**
+Store all **${fmtInr(cementBagsTotal)} bags** of cement in a moisture-controlled elevated shed with plastic underlay to prevent hydration degradation.`;
+        }
 
         // 1. GENERAL QUESTION: Reinforced Concrete
         if (lower.includes("reinforced concrete") || lower.includes("what is concrete") || lower.includes("rcc")) {
@@ -179,7 +355,7 @@ Reducing construction expenditure without compromising structural integrity requ
         }
 
         if (!dataset) {
-            return `### 🤖 CIH Assistant\nI am ready to assist with your construction management, budget analysis, material tracking, and engineering questions. Please ask any general or project-specific question!`;
+            return `### 🤖 CIH Assistant (Llama 3.2)\nI am ready to assist with your construction management, budget analysis, material tracking, and engineering questions. Please ask any general or project-specific question!`;
         }
 
         const projects = dataset.projects || [];
@@ -243,7 +419,7 @@ ${projRisk.length ? `#### ⚠️ Risk Logs:\n${projRisk.map(r => `- **${r.risk_c
         }
 
         // 6. DEFAULT CONVERSATIONAL RESPONSE
-        return `### 🤖 CIH Assistant
+        return `### 🤖 CIH Assistant (Llama 3.2)
 I understand you are asking about: **"${prompt}"**.
 
 I have complete awareness of your **10 active infrastructure projects** (*Delhi Metro Phase 4*, *Mumbai Trans Harbour*, *Indore Smart City*, *Terminal Expansion*, *Bullet Rail*, *Chenab Bridge*, *Navi Mumbai Airport*, *Hyderabad Supergrid*, *Kolkata Tunnel*, *Chennai Expressway*), as well as general civil engineering and financial concepts.

@@ -1327,238 +1327,349 @@ async function sendFloatingChatMessage() {
 }
 
 // ==========================================================================
+// ==========================================================================
 // MATERIAL MANAGEMENT AI CONTROLLERS
 // ==========================================================================
 let currentMaterialEstimateData = null;
 
-async function triggerMaterialAIEstimate() {
-    const projSelect = document.getElementById('aiMatProjectSelect');
-    const locInput = document.getElementById('aiMatLocation');
-    const pTypeSelect = document.getElementById('aiMatProjectType');
-    const bTypeSelect = document.getElementById('aiMatBuildingType');
-    const areaInput = document.getElementById('aiMatAreaSqFt');
-    const floorsInput = document.getElementById('aiMatFloors');
-    const soilSelect = document.getElementById('aiMatSoilType');
-    const foundationSelect = document.getElementById('aiMatFoundation');
+function closeMaterialEstimate() {
+    const outputContainer = document.getElementById('aiMatOutputContainer');
     const outputBox = document.getElementById('aiMatOutputBox');
+    if (outputContainer) outputContainer.style.display = 'none';
+    if (outputBox) outputBox.style.display = 'none';
+}
 
-    const projName = projSelect ? projSelect.value : 'Delhi Metro - Phase 4';
-    const location = (locInput && locInput.value.trim()) ? locInput.value.trim() : 'Project Site Zone';
-    const pType = pTypeSelect ? pTypeSelect.value : 'Commercial Office Hub';
-    const bType = bTypeSelect ? bTypeSelect.value : 'RCC Frame Structure';
-    const areaSqFt = parseFloat(areaInput ? areaInput.value : 50000) || 50000;
-    const numFloors = parseInt(floorsInput ? floorsInput.value : 12, 10) || 12;
-    const soil = soilSelect ? soilSelect.value : 'Clayey Soil (High Plasticity)';
-    const foundation = foundationSelect ? foundationSelect.value : 'Raft / Mat Foundation';
+async function triggerMaterialAIEstimate() {
+    const projSelect      = document.getElementById('aiMatProjectSelect');
+    const locInput        = document.getElementById('aiMatLocation');
+    const pTypeSelect     = document.getElementById('aiMatProjectType');
+    const bTypeSelect     = document.getElementById('aiMatBuildingType');
+    const areaInput       = document.getElementById('aiMatAreaSqFt');
+    const floorsInput     = document.getElementById('aiMatFloors');
+    const soilSelect      = document.getElementById('aiMatSoilType');
+    const foundationSelect= document.getElementById('aiMatFoundation');
+    const mixRatioSelect  = document.getElementById('aiMatMixRatio');
+    const unitSystemSelect= document.getElementById('aiMatUnitSystem');
+    const outputBox       = document.getElementById('aiMatOutputBox');
+    const outputContainer = document.getElementById('aiMatOutputContainer');
 
-    // Total built-up area factor
-    const totalAreaSqFt = areaSqFt * Math.max(1, Math.min(numFloors, 50));
+    const projName   = projSelect       ? projSelect.value         : 'Delhi Metro - Phase 4';
+    const location   = (locInput && locInput.value.trim()) ? locInput.value.trim() : 'Project Site Zone';
+    const pType      = pTypeSelect      ? pTypeSelect.value        : 'Commercial Office Hub';
+    const bType      = bTypeSelect      ? bTypeSelect.value        : 'RCC Frame Structure';
+    const areaSqFt   = parseFloat(areaInput   ? areaInput.value   : 50000) || 50000;
+    const numFloors  = parseInt(floorsInput    ? floorsInput.value : 12, 10) || 12;
+    const soil       = soilSelect       ? soilSelect.value         : 'Clayey Soil (High Plasticity)';
+    const foundation = foundationSelect ? foundationSelect.value   : 'Raft / Mat Foundation';
+    const mixRatio   = mixRatioSelect   ? mixRatioSelect.value     : 'M25 (1:1:2)';
+    const unitSystem = unitSystemSelect ? unitSystemSelect.value   : 'Metric (SI Units)';
+    const totalAreaSqFt = areaSqFt * Math.max(1, Math.min(numFloors, 100));
 
-    // Calculate material quantities based on engineering specs
-    const cementQty = Math.round(totalAreaSqFt * 0.4); // Bags
-    const steelQty = (totalAreaSqFt * 0.0045).toFixed(1); // Tons
-    const sandQty = Math.round(totalAreaSqFt * 1.2); // Cu. Ft.
-    const bricksQty = Math.round(totalAreaSqFt * 12); // Pieces / AAC Blocks
-    const aggregateQty = Math.round(totalAreaSqFt * 1.35); // Cu. Ft.
-    const concreteQty = Math.round(totalAreaSqFt * 0.06); // Cu. M.
-    const tilesQty = Math.round(totalAreaSqFt * 0.7); // Sq. Ft.
-    const paintQty = Math.round(totalAreaSqFt * 0.03); // Liters
-    const waterproofingQty = Math.round(totalAreaSqFt * 0.008); // Liters
-
-    currentMaterialEstimateData = {
-        projName,
-        location,
-        pType,
-        bType,
-        areaSqFt,
-        numFloors,
-        totalAreaSqFt,
-        soil,
-        foundation,
-        date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-        materials: [
-            { name: "Cement", qty: cementQty.toLocaleString(), unit: "Bags", confidence: "96%", explanation: "Estimated Portland Pozzolana Cement for structural slab casting, beam pours, and wall plastering across all levels." },
-            { name: "Steel (Rebar & Structural)", qty: steelQty.toLocaleString(), unit: "Tons", confidence: "98%", explanation: "Fe500 high-tensile TMT rebar for main load-bearing columns, tie beams, and foundation reinforcing mesh." },
-            { name: "Sand (M-Sand / Fine Aggregate)", qty: sandQty.toLocaleString(), unit: "Cu. Ft.", confidence: "94%", explanation: "Manufactured sand (M-Sand) calculated for high-adhesion masonry mortar and smooth finish plastering." },
-            { name: "Bricks / AAC Blocks", qty: bricksQty.toLocaleString(), unit: "Pieces", confidence: "95%", explanation: "Lightweight AAC blocks recommended to optimize structural dead load on elevated floor slabs." },
-            { name: "Aggregate (10mm & 20mm)", qty: aggregateQty.toLocaleString(), unit: "Cu. Ft.", confidence: "96%", explanation: "Coarse aggregate proportioned for heavy RCC foundation footings and high-strength slab casting." },
-            { name: "Concrete (Ready-Mix RMC)", qty: concreteQty.toLocaleString(), unit: "Cu. M.", confidence: "97%", explanation: "Grade M30 ready-mix concrete batching calculated for columns, retaining walls, and suspended floor slabs." },
-            { name: "Tiles (Vitrified & Ceramic)", qty: tilesQty.toLocaleString(), unit: "Sq. Ft.", confidence: "92%", explanation: "Vitrified tiles for main floor corridors and anti-skid ceramic tiles for wet utility areas including 10% wastage." },
-            { name: "Paint (Emulsion & Primer)", qty: paintQty.toLocaleString(), unit: "Liters", confidence: "93%", explanation: "Exterior acrylic weather-shield paint and interior washable low-VOC emulsion including base primer coats." },
-            { name: "Waterproofing Compound", qty: waterproofingQty.toLocaleString(), unit: "Liters", confidence: "95%", explanation: "Polyurethane liquid membrane waterproofing for subterranean foundation footings and terrace level." }
-        ]
+    const materialData = {
+        projectName: projName, projName, location,
+        projectType: pType, pType,
+        buildingType: bType, bType,
+        areaSqFt, numFloors, totalAreaSqFt,
+        soil, foundation, mixRatio, unitSystem,
+        wastageBuffer: '8%'
     };
 
-    // Close modal
     closeModal('materialEstimatorModal');
-
-    const outputContainer = document.getElementById('aiMatOutputContainer');
-    if (outputContainer) outputContainer.style.display = 'block';
-
-    if (!outputBox) return;
-
-    outputBox.style.display = 'block';
-    if (outputContainer) {
-        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (outputContainer) { 
+        outputContainer.style.display = 'block'; 
+        outputContainer.scrollIntoView({ behavior: 'smooth', block: 'start' }); 
     }
+    if (!outputBox) return;
+    outputBox.style.display = 'block';
+
+    // Simple, clean loading state
     outputBox.innerHTML = `
-        <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #E2E8F0; padding-bottom: 14px; margin-bottom: 16px;">
-                <div>
-                    <h3 style="font-size: 18px; font-weight: 800; color: #0F172A; margin: 0 0 4px 0;">🏗️ AI Construction Material Estimation Results</h3>
-                    <div style="font-size: 13px; color: #64748B;">📍 <strong>${projName}</strong> (${location}) &bull; Type: <strong>${pType} (${bType})</strong></div>
-                    <div style="font-size: 12px; color: #64748B; margin-top: 2px;">Area: <strong>${areaSqFt.toLocaleString()} sq ft</strong> (${numFloors} Floors) &bull; Soil: <strong>${soil}</strong> &bull; Foundation: <strong>${foundation}</strong></div>
+        <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 32px 24px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
+            <div class="cih-spinner" style="width: 40px; height: 40px; margin: 0 auto 16px; border: 3px solid #E2E8F0; border-top-color: #2563EB; border-radius: 50%; animation: cihSpin 0.8s linear infinite;"></div>
+            <div style="font-size: 16px; font-weight: 700; color: #0F172A; margin-bottom: 6px;">🤖 Computing Material Quantities with Llama 3.2...</div>
+            <div style="font-size: 13px; color: #64748B; max-width: 520px; margin: 0 auto 14px; line-height: 1.6;">
+                Calculating accurate BOQ, wastage buffers (8%), unit rates, and total budget for <strong>${projName}</strong> (${totalAreaSqFt.toLocaleString()} sq.ft built-up area).
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #1D4ED8; background: #EFF6FF; border: 1px solid #BFDBFE; padding: 4px 12px; border-radius: 20px;">
+                <span style="background: #10B981; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>
+                Active Engine: Llama 3.2 (Local Neural Inference)
+            </span>
+        </div>`;
+
+    try {
+        // Explicitly enforce llama3.2 model
+        const aiResult = await CIH_AI_SERVICE.estimateMaterials(materialData, "", "llama3.2");
+
+        currentMaterialEstimateData = {
+            ...materialData,
+            rawText: aiResult.rawText,
+            html: aiResult.html,
+            date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+        };
+
+        outputBox.innerHTML = renderMaterialEstimateCards(aiResult, materialData);
+
+    } catch (err) {
+        console.error('[Material AI] Error:', err);
+        outputBox.innerHTML = `
+            <div style="background: #FFFFFF; border: 1px solid #FECACA; border-radius: 12px; padding: 24px; color: #991B1B;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 20px;">⚠️</span>
+                    <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: #B91C1C;">AI Estimation Notice</h4>
                 </div>
-                <span class="status-pill on-track" style="font-size: 12px;">✅ AI Confidence: 96%</span>
-            </div>
+                <p style="font-size: 13.5px; margin: 0 0 16px; color: #475569;">
+                    Llama 3.2 calculation encounter: <code>${err.message || 'Service offline'}</code>. You can retry with local fallback emulation.
+                </p>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-primary" style="font-size: 12.5px; padding: 7px 16px; background: #2563EB;" onclick="triggerMaterialAIEstimate()">🔄 Retry Llama 3.2</button>
+                    <button class="btn-secondary" style="font-size: 12.5px; padding: 7px 14px;" onclick="closeMaterialEstimate()">✕ Dismiss</button>
+                </div>
+            </div>`;
+    }
+}
 
-            <div style="overflow-x: auto;">
-                <table class="cih-data-table" style="margin: 0;">
-                    <thead>
-                        <tr style="background: #F8FAFC;">
-                            <th>MATERIAL</th>
-                            <th>ESTIMATED QUANTITY</th>
-                            <th>UNIT</th>
-                            <th>CONFIDENCE</th>
-                            <th>SHORT AI EXPLANATION</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${currentMaterialEstimateData.materials.map(m => `
-                            <tr>
-                                <td><strong>${m.name}</strong></td>
-                                <td><strong style="color: #1D4ED8; font-size: 14px;">${m.qty}</strong></td>
-                                <td><span class="skill-badge">${m.unit}</span></td>
-                                <td><span style="color: #10B981; font-weight: 700;">🟢 ${m.confidence}</span></td>
-                                <td style="font-size: 12px; color: #475569;">${m.explanation}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+/**
+ * Renders a clean, simple, production-grade Material Estimate Output
+ * Displays the full AI report text directly on the page without accordion/collapsible drawers.
+ */
+function renderMaterialEstimateCards(aiResult, d) {
+    const totalSqFt = d.totalAreaSqFt || (d.areaSqFt * d.numFloors);
+    const totalSqM = Math.round(totalSqFt / 10.764);
 
-            <div style="margin-top: 16px; padding: 14px; background: #F0F9FF; border-left: 4px solid #0284C7; border-radius: 6px; font-size: 12.5px; color: #0369A1;">
-                <strong>💡 Engineering Recommendation:</strong> For ${soil} with ${foundation}, soil compaction testing must be completed before pouring ${concreteQty.toLocaleString()} cu. m. of concrete. TMT steel rebar (${steelQty} Tons) must be elevated off the ground to prevent moisture oxidation.
-            </div>
+    // Baseline engineering estimations for quick summary KPIs
+    const concreteM3Net = Math.round(totalSqM * 0.15 * 1.3);
+    const concreteM3Total = Math.round(concreteM3Net * 1.08);
+    const concreteCost = concreteM3Total * 6200;
 
-            <div style="margin-top: 16px; text-align: right;">
-                <button class="btn-primary" style="padding: 9px 20px; font-size: 12.5px;" onclick="downloadMaterialAIEstimate()">📥 Download Human-Readable Report (.TXT)</button>
+    const cementBagsNet = Math.round(concreteM3Net * 7.5);
+    const cementBagsTotal = Math.round(cementBagsNet * 1.08);
+    const cementCost = cementBagsTotal * 410;
+
+    const steelMTNet = Math.round(concreteM3Net * 0.11);
+    const steelMTTotal = Math.max(1, Math.round(steelMTNet * 1.08));
+    const steelCost = steelMTTotal * 63500;
+
+    const sandCuFtTotal = Math.round(totalSqFt * 0.25 * 1.08);
+    const sandCost = sandCuFtTotal * 55;
+
+    const aggCuFtTotal = Math.round(totalSqFt * 0.36 * 1.08);
+    const aggCost = aggCuFtTotal * 42;
+
+    const paintTotalLit = Math.round(totalSqFt * 0.17);
+    const paintCost = Math.round(paintTotalLit * 380);
+
+    const wpLitres = Math.round(totalSqFt * 0.008);
+    const wpCost = wpLitres * 680;
+
+    const grandTotalCost = concreteCost + cementCost + steelCost + sandCost + aggCost + paintCost + wpCost;
+
+    const fmtInr = (n) => '₹' + Number(n).toLocaleString('en-IN');
+    const fmtNum = (n) => Number(n).toLocaleString('en-IN');
+    const grandTotalCrores = (grandTotalCost / 10000000).toFixed(2);
+    const grandTotalDisplay = grandTotalCost >= 10000000 ? `₹${grandTotalCrores} Cr` : fmtInr(grandTotalCost);
+
+    // Save structured items for instant CSV export
+    const materials = [
+        { name: 'Cement (OPC 53 / PPC)', grade: 'IS 8112 - Structural Slab & Columns', net: `${fmtNum(cementBagsNet)} bags`, wastage: '8%', totalQty: `${fmtNum(cementBagsTotal)} Bags`, rate: '₹410 / bag', cost: fmtInr(cementCost) },
+        { name: 'Ready-Mix Concrete (RMC)', grade: `${d.mixRatio || 'M25'} Grade - High Compressive Strength`, net: `${fmtNum(concreteM3Net)} m³`, wastage: '8%', totalQty: `${fmtNum(concreteM3Total)} m³`, rate: '₹6,200 / m³', cost: fmtInr(concreteCost) },
+        { name: 'Steel Rebar (Fe 500D TMT)', grade: 'IS 1786 - High Ductility Seismic Grade', net: `${fmtNum(steelMTNet)} MT`, wastage: '8%', totalQty: `${fmtNum(steelMTTotal)} MT`, rate: '₹63,500 / MT', cost: fmtInr(steelCost) },
+        { name: 'River Sand / M-Sand', grade: 'Zone-II Washed Fine Aggregate', net: `${fmtNum(Math.round(totalSqFt * 0.25))} cu.ft`, wastage: '8%', totalQty: `${fmtNum(sandCuFtTotal)} cu.ft`, rate: '₹55 / cu.ft', cost: fmtInr(sandCost) },
+        { name: 'Coarse Aggregates (20mm)', grade: 'Graded 20mm Blue Metal Granite', net: `${fmtNum(Math.round(totalSqFt * 0.36))} cu.ft`, wastage: '8%', totalQty: `${fmtNum(aggCuFtTotal)} cu.ft`, rate: '₹42 / cu.ft', cost: fmtInr(aggCost) },
+        { name: 'Paint & Primer (Int/Ext)', grade: 'Weatherproof Exterior + Premium Emulsion', net: `${fmtNum(paintTotalLit)} L`, wastage: 'Included', totalQty: `${fmtNum(paintTotalLit)} Liters`, rate: '₹380 / L', cost: fmtInr(paintCost) },
+        { name: 'Waterproofing Compound', grade: 'Polymer-Modified Integral Compound', net: `${fmtNum(wpLitres)} L`, wastage: 'Included', totalQty: `${fmtNum(wpLitres)} Liters`, rate: '₹680 / L', cost: fmtInr(wpCost) }
+    ];
+
+    if (currentMaterialEstimateData) {
+        currentMaterialEstimateData.calculatedMaterials = materials;
+        currentMaterialEstimateData.grandTotalCost = grandTotalCost;
+        currentMaterialEstimateData.grandTotalDisplay = grandTotalDisplay;
+    }
+
+    const formattedReportHTML = AIUtils.formatMarkdownToHTML(aiResult.rawText || aiResult.html);
+
+    return `
+    <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04);">
+        
+        <!-- Top Clean Header Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid #E2E8F0; margin-bottom: 20px;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                    <h3 style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0;">🏗️ AI Material Estimation Report</h3>
+                    <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; padding: 2px 8px; border-radius: 20px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: #10B981;"></span>
+                        Llama 3.2 Active
+                    </span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 12.5px; color: #64748B;">
+                    <span style="background: #F1F5F9; padding: 3px 9px; border-radius: 6px; color: #334155; font-weight: 600;">📍 ${d.projName}</span>
+                    <span style="background: #F1F5F9; padding: 3px 9px; border-radius: 6px; color: #334155;">📐 ${fmtNum(totalSqFt)} sq.ft (${d.numFloors} Floors)</span>
+                    <span style="background: #F1F5F9; padding: 3px 9px; border-radius: 6px; color: #334155;">🏢 ${d.bType}</span>
+                    <span style="background: #F1F5F9; padding: 3px 9px; border-radius: 6px; color: #334155;">🧪 Mix: ${d.mixRatio || 'M25'}</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button class="btn-primary" style="padding: 8px 16px; font-size: 13px; border-radius: 8px; background: #2563EB; color: #FFFFFF; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" onclick="downloadMaterialAIEstimate()">
+                    📥 Download Report (.TXT)
+                </button>
+                <button class="btn-secondary" style="padding: 8px 14px; font-size: 13px; border-radius: 8px; background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" onclick="downloadMaterialAIPDF()">
+                    📄 Print / PDF
+                </button>
+                <button class="btn-secondary" style="padding: 8px 14px; font-size: 13px; border-radius: 8px; background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" onclick="downloadMaterialEstimateCSV()">
+                    📊 Export CSV
+                </button>
+                <button class="btn-secondary" style="padding: 8px 12px; font-size: 13px; border-radius: 8px; background: #F1F5F9; border: 1px solid #E2E8F0; color: #64748B; cursor: pointer;" onclick="openModal('materialEstimatorModal')" title="Edit Parameters">
+                    ✏️ Edit
+                </button>
+                <button style="padding: 8px 12px; font-size: 14px; border-radius: 8px; background: #F1F5F9; border: 1px solid #E2E8F0; color: #64748B; cursor: pointer;" onclick="closeMaterialEstimate()" title="Close Report">
+                    ✕
+                </button>
             </div>
         </div>
-    `;
+
+        <!-- 4 Clean Executive Metric Highlight Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 22px;">
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">ESTIMATED MATERIAL BUDGET</div>
+                <div style="font-size: 22px; font-weight: 800; color: #2563EB; margin: 4px 0;">${grandTotalDisplay}</div>
+                <div style="font-size: 11px; color: #64748B;">Total: ${fmtInr(grandTotalCost)} (inc. 8% buffer)</div>
+            </div>
+
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">READY-MIX CONCRETE</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 4px 0;">${fmtNum(concreteM3Total)} m³</div>
+                <div style="font-size: 11px; color: #64748B;">Mix ${d.mixRatio || 'M25'} batching volume</div>
+            </div>
+
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">STEEL REBAR (Fe 500D)</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 4px 0;">${fmtNum(steelMTTotal)} MT</div>
+                <div style="font-size: 11px; color: #64748B;">Seismic grade ductile rebar</div>
+            </div>
+
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">CEMENT REQUIREMENT</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 4px 0;">${fmtNum(cementBagsTotal)} Bags</div>
+                <div style="font-size: 11px; color: #64748B;">OPC 53 / PPC standard (IS 8112)</div>
+            </div>
+        </div>
+
+        <!-- FULL AI-GENERATED REPORT DIRECTLY DISPLAYED (NO ACCORDION / COLLAPSIBLE) -->
+        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #E2E8F0; padding-bottom: 12px; margin-bottom: 18px;">
+                <div style="font-size: 15px; font-weight: 800; color: #0F172A; display: flex; align-items: center; gap: 8px;">
+                    <span>📋</span> Detailed Quantity Survey &amp; Engineering Report (Llama 3.2)
+                </div>
+                <span style="font-size: 12px; color: #64748B; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 3px 10px; border-radius: 6px;">
+                    Generated: ${d.date}
+                </span>
+            </div>
+            
+            <div style="font-size: 14px; line-height: 1.75; color: #1E293B;">
+                ${formattedReportHTML}
+            </div>
+        </div>
+
+        <!-- Bottom Action Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 14px; border-top: 1px solid #E2E8F0;">
+            <div style="font-size: 12px; color: #64748B;">
+                ⚡ Generated by CIH Quantity Surveying Engine (Llama 3.2) &bull; ${d.date}
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-primary" style="padding: 8px 16px; font-size: 12.5px; border-radius: 6px; background: #2563EB; color: #FFFFFF;" onclick="downloadMaterialAIEstimate()">
+                    📥 Download Report (.TXT)
+                </button>
+                <button class="btn-secondary" style="padding: 8px 14px; font-size: 12.5px; border-radius: 6px; background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155;" onclick="downloadMaterialAIPDF()">
+                    📄 Print / PDF
+                </button>
+                <button class="btn-secondary" style="padding: 8px 14px; font-size: 12.5px; border-radius: 6px; background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155;" onclick="downloadMaterialEstimateCSV()">
+                    📊 Export CSV
+                </button>
+            </div>
+        </div>
+    </div>`;
 }
 
 function downloadMaterialAIEstimate() {
-    if (!currentMaterialEstimateData) {
-        alert('Please run an material estimation first.');
+    if (!currentMaterialEstimateData || !currentMaterialEstimateData.rawText) {
+        alert('Please run a material estimation first.');
         return;
     }
-
     const d = currentMaterialEstimateData;
     const reportText = `================================================================================
-CONSTRUCTION INTELLIGENT HUB (CIH) - PROFESSIONAL MATERIAL ESTIMATION REPORT
+CONSTRUCTION INTELLIGENT HUB (CIH) - AI MATERIAL QUANTITY SURVEYING REPORT
 ================================================================================
-Project Site Name : ${d.projName}
-Site Location     : ${d.location}
-Project Category  : ${d.pType}
-Building Structure: ${d.bType}
-Construction Area : ${d.areaSqFt.toLocaleString()} Square Feet (${d.numFloors} Floors)
-Total Built Area  : ${d.totalAreaSqFt.toLocaleString()} Square Feet
-Soil Specification: ${d.soil}
-Foundation Spec   : ${d.foundation}
-Date of Estimation: ${d.date}
+Project Site Name   : ${d.projName}
+Site Location       : ${d.location}
+Project Category    : ${d.pType}
+Building System     : ${d.bType}
+Construction Area   : ${d.areaSqFt ? Number(d.areaSqFt).toLocaleString() : '—'} Sq. Ft. (${d.numFloors} Floors)
+Total Built Area    : ${d.totalAreaSqFt ? Number(d.totalAreaSqFt).toLocaleString() : '—'} Sq. Ft.
+Concrete Mix Ratio  : ${d.mixRatio || 'M25'}
+Soil Classification : ${d.soil}
+Foundation Type     : ${d.foundation}
+Wastage Allowance   : ${d.wastageBuffer || '8%'}
+Total Estimated Cost: ${d.grandTotalDisplay || 'Calculated via Llama 3.2'}
+Date of Estimation  : ${d.date}
+AI Runtime Engine   : Llama 3.2 (Local Neural Inference via Ollama)
 ================================================================================
 
-EXECUTIVE SUMMARY & NARRATIVE OVERVIEW
---------------------------------------------------------------------------------
-This official material estimation report has been generated by the Construction 
-Intelligent Hub (CIH) AI Engineering Engine.
-
-Based on your structural parameters of ${d.areaSqFt.toLocaleString()} sq ft across ${d.numFloors} floors 
-constructed on ${d.soil} utilizing ${d.foundation}, 
-the required raw materials have been calculated below in plain, human-readable 
-language for project planning and procurement.
-
-DETAILED MATERIAL QUANTITY BREAKDOWN & EXPLANATIONS
---------------------------------------------------------------------------------
-1. CEMENT (PORTLAND POZZOLANA / ORDINARY PORTLAND)
-   - Estimated Quantity : ${d.materials[0].qty} Bags
-   - Calculation Unit   : Bags (50 kg per bag)
-   - AI Confidence Score: ${d.materials[0].confidence}
-   - Plain Explanation  : ${d.materials[0].explanation}
-
-2. STEEL (REBAR & STRUCTURAL TMT FE500)
-   - Estimated Quantity : ${d.materials[1].qty} Tons
-   - Calculation Unit   : Metric Tons
-   - AI Confidence Score: ${d.materials[1].confidence}
-   - Plain Explanation  : ${d.materials[1].explanation}
-
-3. SAND (MANUFACTURED M-SAND / FINE AGGREGATE)
-   - Estimated Quantity : ${d.materials[2].qty} Cubic Feet
-   - Calculation Unit   : Cu. Ft.
-   - AI Confidence Score: ${d.materials[2].confidence}
-   - Plain Explanation  : ${d.materials[2].explanation}
-
-4. BRICKS / ACC MASONRY BLOCKS
-   - Estimated Quantity : ${d.materials[3].qty} Pieces
-   - Calculation Unit   : Pieces
-   - AI Confidence Score: ${d.materials[3].confidence}
-   - Plain Explanation  : ${d.materials[3].explanation}
-
-5. COARSE AGGREGATE (10MM & 20MM GRADED)
-   - Estimated Quantity : ${d.materials[4].qty} Cubic Feet
-   - Calculation Unit   : Cu. Ft.
-   - AI Confidence Score: ${d.materials[4].confidence}
-   - Plain Explanation  : ${d.materials[4].explanation}
-
-6. READY-MIX CONCRETE (RMC GRADE M30/M40)
-   - Estimated Quantity : ${d.materials[5].qty} Cubic Meters
-   - Calculation Unit   : Cu. M.
-   - AI Confidence Score: ${d.materials[5].confidence}
-   - Plain Explanation  : ${d.materials[5].explanation}
-
-7. TILES (VITRIFIED FLOOR & CERAMIC WALL)
-   - Estimated Quantity : ${d.materials[6].qty} Square Feet
-   - Calculation Unit   : Sq. Ft.
-   - AI Confidence Score: ${d.materials[6].confidence}
-   - Plain Explanation  : ${d.materials[6].explanation}
-
-8. PAINT (EXTERIOR ACRYLIC & INTERIOR EMULSION)
-   - Estimated Quantity : ${d.materials[7].qty} Liters
-   - Calculation Unit   : Liters
-   - AI Confidence Score: ${d.materials[7].confidence}
-   - Plain Explanation  : ${d.materials[7].explanation}
-
-9. WATERPROOFING & ADDITIVES
-   - Estimated Quantity : ${d.materials[8].qty} Liters
-   - Calculation Unit   : Liters
-   - AI Confidence Score: ${d.materials[8].confidence}
-   - Plain Explanation  : ${d.materials[8].explanation}
+${d.rawText}
 
 ================================================================================
-STRUCTURAL INTEGRITY & FIELD PROCUREMENT ADVICE
---------------------------------------------------------------------------------
-1. Soil & Foundation Guidance:
-   Given the specified ${d.soil} and ${d.foundation}, 
-   soil plate load tests and moisture compaction verification must be conducted 
-   prior to initiating mass concrete pouring.
-
-2. Storage & Weather Protection:
-   Store the estimated ${d.materials[0].qty} cement bags in a moisture-proof elevated 
-   warehouse. Keep the ${d.materials[1].qty} Tons of steel rebar off bare ground to prevent 
-   surface rust and oxidation prior to binding.
-
-3. Staged Procurement Strategy:
-   Deliver concrete and sand in bi-weekly batches matching construction stage 
-   milestones to prevent storage degradation on site.
-
-================================================================================
-End of Official Material Estimation Report - Construction Intelligent Hub 2026
+End of Official AI Material Estimation Report - Construction Intelligent Hub 2026
 ================================================================================`;
 
-    const fileName = `${d.projName.replace(/\s+/g, '_')}_Material_Estimate_Report.txt`;
-    AIUtils.downloadAsFile(fileName, reportText);
+    const fileName = `${(d.projName || 'Project').replace(/[^a-zA-Z0-9]/g, '_')}_Material_Estimate_Report.txt`;
+    AIUtils.downloadAsFile(fileName, reportText, "text/plain");
 }
+
+function downloadMaterialAIPDF() {
+    if (!currentMaterialEstimateData) {
+        alert('Please run a material estimation first.');
+        return;
+    }
+    const d = currentMaterialEstimateData;
+    const title = `${d.projName} - Material Estimate Report`;
+    const html = `
+        <h1>🏗️ Material Quantity & Cost Estimation Report</h1>
+        <div class="header-meta">
+            <div><strong>Project:</strong> ${d.projName} (${d.location})</div>
+            <div><strong>Structure:</strong> ${d.bType} | <strong>Mix:</strong> ${d.mixRatio || 'M25'}</div>
+            <div><strong>Area:</strong> ${Number(d.totalAreaSqFt || d.areaSqFt).toLocaleString()} sq. ft. (${d.numFloors} Floors)</div>
+            <div><strong>Total Estimated Material Budget:</strong> ${d.grandTotalDisplay || '—'}</div>
+            <div><strong>Date:</strong> ${d.date} | <strong>Engine:</strong> Llama 3.2 Neural Inference</div>
+        </div>
+        <div>
+            ${AIUtils.formatMarkdownToHTML(d.rawText || '')}
+        </div>
+        <hr>
+        <div style="font-size: 11px; color: #64748B; text-align: center;">
+            Generated by Construction Intelligent Hub (CIH) &bull; Official Quantity Survey Report
+        </div>
+    `;
+    AIUtils.printAsPDF(title, html);
+}
+
+function downloadMaterialEstimateCSV() {
+    if (!currentMaterialEstimateData) {
+        alert('Please run a material estimation first.');
+        return;
+    }
+    const d = currentMaterialEstimateData;
+    let csv = `Material,Specification,Net Requirement,Wastage Buffer,Total Quantity,Unit Rate,Estimated Cost (INR)\n`;
+    if (d.calculatedMaterials && d.calculatedMaterials.length > 0) {
+        d.calculatedMaterials.forEach(m => {
+            csv += `"${m.name}","${m.grade}","${m.net}","${m.wastage}","${m.totalQty}","${m.rate}","${m.cost}"\n`;
+        });
+        csv += `"Grand Total","All Categories","","","","","${d.grandTotalDisplay}"\n`;
+    } else {
+        csv += `"Detailed BOQ","${d.projName}","${d.totalAreaSqFt} sq.ft","8%","","","${d.grandTotalDisplay}"\n`;
+    }
+
+    const fileName = `${(d.projName || 'Project').replace(/[^a-zA-Z0-9]/g, '_')}_Material_BOQ.csv`;
+    AIUtils.downloadAsFile(fileName, csv, "text/csv");
+}
+
 
 // ==========================================================================
 // BUDGET MANAGEMENT AI CONTROLLERS
@@ -1848,8 +1959,25 @@ function switchAiTab(tabName) {
     });
 }
 
+function handleAIModelChange(modelName) {
+    const selectedModel = modelName || 'llama3.2';
+    if (typeof OLLAMA_CONFIG !== 'undefined') {
+        OLLAMA_CONFIG.model = selectedModel;
+        OLLAMA_CONFIG.activeModel = selectedModel;
+        OLLAMA_CONFIG.defaultModel = selectedModel;
+    }
+    const statusBadge = document.getElementById('aiModelStatusBadge');
+    if (statusBadge) {
+        statusBadge.innerHTML = `🟢 ${selectedModel} Connected`;
+    }
+}
+
 function initAIInsightsPage() {
     switchAiTab('doc');
+    const modelSelect = document.getElementById('ai-model-select');
+    if (modelSelect && typeof OLLAMA_CONFIG !== 'undefined') {
+        modelSelect.value = OLLAMA_CONFIG.defaultModel || OLLAMA_CONFIG.model || 'llama3.2';
+    }
 }
 
 /**

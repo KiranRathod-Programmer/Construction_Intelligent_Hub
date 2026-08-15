@@ -1957,7 +1957,20 @@ body::after {
     font-weight: 800;
     color: #1D4ED8;
     margin-top: 12px;
-    /* --- AI INSIGHTS VIBRANT TAB SYSTEM --- */
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.cih-spinner {
+    display: inline-block;
+    border-radius: 50%;
+    animation: spin 0.85s linear infinite;
+}
+
+/* --- AI INSIGHTS VIBRANT TAB SYSTEM --- */
 .ai-tabs-container {
     display: inline-flex;
     gap: 10px;
@@ -2000,6 +2013,16 @@ body::after {
     border: 1px solid #1E40AF !important;
     box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3) !important;
     font-weight: 800 !important;
+}
+
+@keyframes cihSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.cih-spinner {
+    display: inline-block;
+    animation: cihSpin 0.8s linear infinite;
 }
 
 

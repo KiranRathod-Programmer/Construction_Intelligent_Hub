@@ -13,28 +13,28 @@ const CIH_PROMPTS = {
     getLiveWebappContext: () => {
         if (typeof CIH_DATASET === 'undefined') return '';
 
-        const projects = (CIH_DATASET.projects || []).map(p => 
+        const projects = (CIH_DATASET.projects || []).map(p =>
             `- Project: "${p.title}" (ID: ${p.id}) | Location: ${p.city} | Status: ${p.status} | Budget: ${p.formattedBudget} (₹${p.budgetCrores} Cr) | Deadline: ${p.deadline} | Progress: ${p.progressPercent}% | Risk Level: ${p.riskLevel || 'Low'} | Team Size: ${p.totalTeamCount}`
         ).join('\n');
 
         const stats = CIH_DATASET.dashboardStats || {};
         const statsSummary = `Portfolio Summary: ${stats.totalProjects?.count || 10} Total Active Projects (${stats.running?.count || 6} Running, ${stats.delayed?.count || 2} Delayed, ${stats.highRisk?.count || 2} High Risk, ${stats.completed?.count || 118} Historical Completed). Total Portfolio Budget: ₹94,830 Cr. Total Spent: ₹47,215 Cr.`;
 
-        const materials = (CIH_DATASET.materialInventory || []).map(m => 
+        const materials = (CIH_DATASET.materialInventory || []).map(m =>
             `- Material: "${m.name}" | Stock: ${m.stockQuantity} | Reorder Threshold: ${m.reorderLevel} | Status: ${m.status} | Assigned Project: "${m.assignedProject}" | Supplier: ${m.supplier} | RFID Tag: ${m.rfidTag} | Utilization: ${m.utilizationPercent}%`
         ).join('\n');
 
         const budget = CIH_DATASET.budgetOverview || {};
-        const expenses = (budget.expensesList || []).map(e => 
+        const expenses = (budget.expensesList || []).map(e =>
             `- Expense: "${e.title}" | Project: "${e.project}" | Category: ${e.category} | Amount: ${e.amount} | Status: ${e.status} | Date: ${e.date}`
         ).join('\n');
         const budgetSummary = `Financial State: Total Allocated Portfolio Budget = ${budget.totalPortfolioBudget || '₹94,830 Cr'} | Total Spent = ${budget.totalSpent || '₹47,215 Cr'} | Remaining Budget = ${budget.remainingBudget || '₹47,615 Cr'} | Variance: ${budget.variancePercent || '+1.2%'}\nLogged Expense Transactions:\n${expenses}`;
 
-        const equipment = (CIH_DATASET.equipmentAssets || []).map(e => 
+        const equipment = (CIH_DATASET.equipmentAssets || []).map(e =>
             `- Heavy Machine: "${e.asset_name}" (${e.unit_code}) | Project: "${e.assigned_project_id}" | Health: ${e.engine_health_pct}% | Operating Hours: ${e.operating_hours} hrs | Fuel Rate: ${e.fuel_rate_lph} | Maintenance Due: ${e.maintenance_due_hrs} hrs | Status: ${e.status} | Operator: ${e.operator}`
         ).join('\n');
 
-        const team = (CIH_DATASET.teamMembers || []).map(t => 
+        const team = (CIH_DATASET.teamMembers || []).map(t =>
             `- Team Member: "${t.name}" | Role: ${t.role} (${t.category}) | Project: "${t.assignedProject}" | Email: ${t.email} | Phone: ${t.phone} | Access Level: ${t.accessLevel}`
         ).join('\n');
 
@@ -88,15 +88,148 @@ BEHAVIORAL GUIDELINES:
 ${CIH_PROMPTS.getLiveWebappContext()}`;
     },
 
-    materialEstimation: (projectName, specs) => {
-        return `Project: ${projectName || "Active Job Site"}
-Specifications: ${specs || "Standard civil infrastructure building specifications"}
+    materialEstimation: (params, legacySpecs = "") => {
+        if (typeof params === 'string') {
+            return `Project: ${params || "Active Job Site"}
+Specifications: ${legacySpecs || "Standard civil infrastructure building specifications"}
+Tasks: Estimate material quantities (Cement, Concrete, Steel Rebar, Sand, Aggregates, Paint) with wastage and INR costs.`;
+        }
 
-Tasks:
-1. Estimate construction material quantities (Steel, Concrete, Rebar, Cement).
-2. Recommend suitable material grades and specs.
-3. Explain clearly why those specific materials are recommended for structural integrity.`;
+        const p = params || {};
+        const projName   = p.projectName || p.projName || "Active Project Site";
+        const loc        = p.location    || "Metro Infrastructure Zone";
+        const pType      = p.projectType || p.pType    || "Commercial Infrastructure";
+        const bType      = p.buildingType|| p.bType    || "RCC Frame Structure";
+        const areaSqFtRaw   = Number(p.areaSqFt)  || 50000;
+        const numFloors     = Number(p.numFloors) || 12;
+        const totalSqFtRaw  = p.totalAreaSqFt ? Number(p.totalAreaSqFt) : areaSqFtRaw * numFloors;
+        const totalSqM      = (totalSqFtRaw / 10.764).toFixed(0);
+        const soil       = p.soil       || "Clayey Soil (High Plasticity)";
+        const foundation = p.foundation || "Raft / Mat Foundation";
+        const wastage    = p.wastageBuffer || "8%";
+        const mixRatio   = p.mixRatio   || "M25 (1:1:2)";
+        const unitSystem = p.unitSystem || "Metric (SI Units)";
+
+        // Pre-compute concrete volume for reference
+        const concreteM3 = Math.round(totalSqM * 0.15 * 1.3);  // slab + beam/column coefficient
+        const cementBagsNet = Math.round(concreteM3 * 7.5);      // M25 = 7.5 bags/m³
+        const steelMTnet    = Math.round(concreteM3 * 0.11);     // ~110 kg/m³ for RCC
+        const sandCuFtNet   = Math.round(totalSqFtRaw * 0.25);
+        const aggCuFtNet    = Math.round(totalSqFtRaw * 0.36);
+        const extPaintLitNet= Math.round(totalSqFtRaw * 0.05);   // exterior walls
+        const intPaintLitNet= Math.round(totalSqFtRaw * 0.12);   // interior 2 coats
+
+        return `You are CIH Material AI — a Senior Chartered Quantity Surveyor (MRICS) and Civil Cost Engineer.
+
+PROJECT INPUT:
+- Project: ${projName} | Location: ${loc}
+- Sector: ${pType} | Structure: ${bType}
+- Base Area: ${areaSqFtRaw.toLocaleString()} sq ft | Floors: ${numFloors} | Total: ${totalSqFtRaw.toLocaleString()} sq ft (≈${totalSqM} m²)
+- Concrete Mix: ${mixRatio} | Soil: ${soil} | Foundation: ${foundation}
+- Wastage Allowance: ${wastage} | Units: ${unitSystem}
+
+CALCULATION REFERENCE (use these as your starting basis, refine with engineering judgment):
+- Concrete volume ≈ ${concreteM3} m³
+- Cement net ≈ ${cementBagsNet} bags (7.5 bags/m³ for M25); Coarse Agg: 0.88 m³ per m³ concrete; Fine Agg: 0.44 m³ per m³
+- Steel net ≈ ${steelMTnet} MT (110 kg/m³ for RCC Frame); adjust for ${bType}
+- Sand ≈ ${sandCuFtNet} cu.ft net; Coarse Aggregates ≈ ${aggCuFtNet} cu.ft net
+- Paint: Exterior ≈ ${extPaintLitNet} L; Interior ≈ ${intPaintLitNet} L (2 coats)
+
+OUTPUT FORMAT — YOU MUST FOLLOW THIS EXACT STRUCTURE. DO NOT USE TABLES. DO NOT USE PLACEHOLDER TEXT.
+
+---
+
+# 🏗️ Material Estimation Report — ${projName}
+
+I have completed the Quantity Survey and Material Estimation analysis for your **${areaSqFtRaw.toLocaleString()} sq. ft. ${pType} Project** (${bType}, ${numFloors} Floors). Below is the detailed material requirement breakdown:
+
+---
+
+## 🧱 Cement
+
+**Quantity:** [NET bags] Bags ([NET bags] net requirement + [WASTAGE bags] bags wastage allowance)
+**Grade:** OPC 53 (IS 8112) — recommended for [brief structural rationale specific to ${bType}].
+**Estimated Cost:** ₹[SUBTOTAL] (@ ₹410 / bag)
+
+---
+
+## 🪨 Ready-Mix Concrete (${mixRatio})
+
+**Quantity:** [NET] Cubic Meters ([NET] net requirement + [WASTAGE] cu. m wastage allowance)
+**Grade:** ${mixRatio} — designed for [brief rationale: columns, beams, slabs].
+**Estimated Cost:** ₹[SUBTOTAL] (@ ₹6,200 / cu. m)
+
+---
+
+## 🔩 Steel Rebar (Fe 500D TMT)
+
+**Quantity:** [NET] Metric Tons ([NET] net requirement + [WASTAGE] MT wastage allowance)
+**Grade:** Fe500D IS 1786 — [brief rationale: seismic ductility, tension reinforcement].
+**Estimated Cost:** ₹[SUBTOTAL] (@ ₹63,500 / MT)
+
+---
+
+## 🪣 River Sand / Manufactured Sand (M-Sand)
+
+**Quantity:** [NET] Cubic Feet ([NET] net requirement + [WASTAGE] cu. ft buffer)
+**Grade:** Zone-II Double-Washed M-Sand — [brief rationale: plastering, concrete mix].
+**Estimated Cost:** ₹[SUBTOTAL] (@ ₹55 / cu. ft)
+
+---
+
+## 🪨 Coarse Aggregates (20mm)
+
+**Quantity:** [NET] Cubic Feet ([NET] net requirement + [WASTAGE] cu. ft buffer)
+**Grade:** Well-graded 20mm Crushed Stone — [brief rationale].
+**Estimated Cost:** ₹[SUBTOTAL] (@ ₹42 / cu. ft)
+
+---
+
+## 🎨 Exterior and Interior Paint
+
+**Quantity:** [TOTAL] Litres Total ([EXT] Litres Exterior + [INT] Litres Interior)
+**Specification:** 1 coat alkali-resistant primer + 2 coats weather-shield acrylic emulsion.
+**Estimated Cost:** ₹[SUBTOTAL]
+
+---
+
+## 💧 Waterproofing Compound
+
+**Quantity:** [QTY] Litres
+**Specification:** Crystalline admixture for foundation, roof slab, and basement waterproofing.
+**Estimated Cost:** ₹[SUBTOTAL] (@ ₹680 / L)
+
+---
+
+## 💰 Grand Total Estimated Material Budget
+
+**₹[GRAND TOTAL]** *(Includes ${wastage} total site buffer and wastage allowance)*
+
+---
+
+## 📋 Executive Recommendations & Strategic Directives
+
+**1. Storage and Moisture Management:**
+[Specific advice for cement and aggregate storage on this site]
+
+**2. Phased Procurement of Steel:**
+[Specific phased delivery recommendation with tonnage splits for ${steelMTnet} MT]
+
+**3. Quality Testing and Mix Verification:**
+[Mandatory cube test schedule for ${mixRatio} concrete]
+
+**4. Wastage Optimization:**
+[Site monitoring protocol to stay within ${wastage} threshold for ${soil} site conditions]
+
+---
+IMPORTANT RULES:
+- Replace every [bracketed placeholder] with a real calculated number
+- Quantities must be consistent: wastage = net × wastage rate
+- All INR amounts must use Indian number formatting (₹X,XX,XXX)
+- Grand Total must equal sum of all subtotals`;
     },
+
+    quantitySurveying: (params) => CIH_PROMPTS.materialEstimation(params),
 
     budgetAnalysis: (projectName, totalBudget, spent, categoryList) => {
         return `Project: ${projectName || "Active Infrastructure Portfolio"}

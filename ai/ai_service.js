@@ -3,6 +3,7 @@
  * 
  * Exposes clean, modular business logic methods for all application pages.
  * Fully decoupled from UI DOM logic and Ollama network endpoints.
+ * Primary Default Model: Llama 3.2 (llama3.2)
  */
 
 const CIH_AI_SERVICE = {
@@ -42,7 +43,7 @@ const CIH_AI_SERVICE = {
 
         if (fileName.endsWith('.pdf')) {
             const arrayBuffer = await file.arrayBuffer();
-            
+
             // 1. Try PDF.js if available on window
             if (typeof window.pdfjsLib !== 'undefined') {
                 try {
@@ -50,7 +51,7 @@ const CIH_AI_SERVICE = {
                     const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
                     const pdfDoc = await loadingTask.promise;
                     let fullText = '';
-                    
+
                     for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                         const page = await pdfDoc.getPage(pageNum);
                         const textContent = await page.getTextContent();
@@ -69,7 +70,7 @@ const CIH_AI_SERVICE = {
             // 2. Fallback Binary Stream PDF Text Extractor
             const textDecoder = new TextDecoder('latin1');
             const binaryString = textDecoder.decode(arrayBuffer);
-            
+
             // Extract text tokens inside (text) Tj or [(text)] TJ
             const textMatches = [];
             const tjRegex = /\(([^()]+)\)\s*Tj/g;
@@ -110,12 +111,32 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * Material Management AI: Quantity Estimation & Recommendations
+     * Material Management AI: Quantity Estimation & Recommendations (Live Llama 3.2 Inference)
      */
-    estimateMaterials: async (projectName, specs) => {
-        const prompt = CIH_PROMPTS.materialEstimation(projectName, specs);
-        const response = await OllamaClient.generate(prompt, CIH_PROMPTS.systemPrompt);
+    estimateMaterials: async (paramsOrProjectName, specs = "", modelName = "llama3.2") => {
+        let prompt;
+        let projTitle = "Active Infrastructure Site";
+
+        if (typeof paramsOrProjectName === 'object' && paramsOrProjectName !== null) {
+            prompt = CIH_PROMPTS.materialEstimation(paramsOrProjectName);
+            projTitle = paramsOrProjectName.projectName || paramsOrProjectName.projName || "Active Infrastructure Site";
+        } else {
+            prompt = CIH_PROMPTS.materialEstimation(paramsOrProjectName, specs);
+            projTitle = paramsOrProjectName || "Active Infrastructure Site";
+        }
+
+        const systemPrompt = `You are CIH Material AI — a Senior Chartered Quantity Surveyor (MRICS) and Civil Cost Engineer for Construction Intelligent Hub.
+
+ABSOLUTE RULES — NEVER VIOLATE:
+1. Replace EVERY [bracketed placeholder] with a real, calculated number. Zero placeholders allowed in output.
+2. Each material section must show: net quantity + wastage quantity = total, plus INR cost.
+3. Grand Total = arithmetic sum of all material subtotals. Show the number.
+4. Use Indian number formatting: ₹X,XX,XXX (lakhs notation).
+5. Executive Recommendations must be specific to the project parameters given — not generic advice.`;
+
+        const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
         return {
+            projectName: projTitle,
             prompt: prompt,
             rawText: response,
             html: AIUtils.formatMarkdownToHTML(response)
@@ -123,9 +144,18 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * Budget Management AI: Interactive Project Budget Estimation
+     * Quantity Surveying Analysis Facade for Material Telemetry
      */
-    estimateProjectBudget: async (params) => {
+    generateQuantitySurveyingAnalysis: async (materialData, modelName = "llama3.2") => {
+        return CIH_AI_SERVICE.estimateMaterials(materialData, "", modelName);
+    },
+
+
+
+    /**
+     * Budget Management AI: Interactive Project Budget Estimation (Defaults to Llama 3.2)
+     */
+    estimateProjectBudget: async (params, modelName = "llama3.2") => {
         const p = params || {
             projectType: 'Commercial High-Rise Tower',
             areaSqFt: '250,000',
@@ -138,7 +168,7 @@ const CIH_AI_SERVICE = {
         const prompt = CIH_PROMPTS.budgetEstimation(p);
         const systemPrompt = `You are CIH Financial AI, an expert civil engineering quantity surveyor and cost estimator for Construction Intelligent Hub. Evaluate project parameters and generate structured, accurate budget estimations.`;
 
-        const response = await OllamaClient.generate(prompt, systemPrompt);
+        const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
 
         return {
             params: p,
@@ -148,11 +178,11 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * Budget Management AI: Spending Analysis & Overrun Prediction
+     * Budget Management AI: Spending Analysis & Overrun Prediction (Defaults to Llama 3.2)
      */
-    analyzeBudget: async (projectName, totalBudget, spent, categoryList) => {
+    analyzeBudget: async (projectName, totalBudget, spent, categoryList, modelName = "llama3.2") => {
         const prompt = CIH_PROMPTS.budgetAnalysis(projectName, totalBudget, spent, categoryList);
-        const response = await OllamaClient.generate(prompt, CIH_PROMPTS.systemPrompt);
+        const response = await OllamaClient.generate(prompt, CIH_PROMPTS.systemPrompt, modelName);
         return {
             prompt: prompt,
             rawText: response,
@@ -161,15 +191,15 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * Risk Analysis AI: Dynamic Llama 3.2 Risk Report & Mitigation Plan Generator
+     * Risk Analysis AI: Dynamic Llama 3.2 Risk Report & Mitigation Plan Generator (Defaults to Llama 3.2)
      */
-    evaluateRisk: async (projectName, snapshotData) => {
+    evaluateRisk: async (projectName, snapshotData, modelName = "llama3.2") => {
         const snap = snapshotData || (typeof CIH_DATASET !== 'undefined' ? CIH_DATASET.getProjectSnapshot(projectName) : { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, formattedBudget: '₹1,000 Cr', deadline: 'Dec 2026' });
 
         const prompt = CIH_PROMPTS.riskAssessment(projectName, snap);
         const systemPrompt = `You are CIH Risk AI, an expert civil engineering risk analyst for Construction Intelligent Hub. Evaluate project telemetry and generate clean, structured, executive risk analysis reports.`;
 
-        const response = await OllamaClient.generate(prompt, systemPrompt);
+        const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
 
         return {
             projectName: snap.title,
@@ -180,9 +210,9 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * Reports AI: Executive Project Performance & Audit Generator
+     * Reports AI: Executive Project Performance & Audit Generator (Defaults to Llama 3.2)
      */
-    generateExecutiveReport: async (projectName, reportFrequency = 'Weekly Report') => {
+    generateExecutiveReport: async (projectName, reportFrequency = 'Weekly Report', modelName = "llama3.2") => {
         const snap = (typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
             ? CIH_DATASET.getProjectSnapshot(projectName)
             : { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, formattedBudget: '₹1,000 Cr', deadline: 'Dec 2026' };
@@ -217,22 +247,22 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * AI Insights 1: PDF & Construction Document Analyzer
+     * AI Insights 1: PDF & Construction Document Analyzer (Defaults to Llama 3.2)
      */
-    analyzeUploadedDocument: async (docTitle, docContent) => {
+    analyzeUploadedDocument: async (docTitle, docContent, modelName = "llama3.2") => {
         const title = docTitle || "Construction Agreement / BOQ Document";
         const text = (docContent && docContent.trim()) ? docContent.trim() : "BOQ Contract Agreement: Completion target Dec 2026. Total contract value: ₹1,450 Cr. Material steel requirement: 4,200 Tons. Milestone delay penalty: 0.5% per week up to 10% maximum.";
 
         const lower = text.toLowerCase();
-        
+
         const datesMatch = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4})/gi) || ['Dec 2026'];
         const costMatch = text.match(/(₹\s*[\d,]+(?:\s*cr|\s*lakh)?|\$[\d,]+|\d+(?:,\d+)*(?:\s*cr|\s*lakh))/gi) || ['₹1,450 Cr'];
         const qtyMatch = text.match(/(\d+(?:,\d+)*(?:\s*tons|\s*sq\.?\s*ft|\s*m3|\s*liters|\s*bags|\s*units|\s*%))/gi) || ['4,200 Tons', '0.5% per week penalty'];
-        
+
         let riskLevel = "LOW RISK";
         let riskBg = "#DCFCE7";
         let riskColor = "#10B981";
-        
+
         if (lower.includes("penalty") || lower.includes("liquidated") || lower.includes("breach") || lower.includes("terminate") || lower.includes("overrun") || lower.includes("discrepancy")) {
             riskLevel = "HIGH RISK IDENTIFIED";
             riskBg = "#FEE2E2";
@@ -243,7 +273,7 @@ const CIH_AI_SERVICE = {
             riskColor = "#D97706";
         }
 
-        const summary = `Extracted document context for "${title}" specifies core contractual milestones, capital allocations, and material delivery benchmarks. Overall clause structure complies with CIH standard site governance specifications.`;
+        const summary = `Extracted document context for "${title}" specifies core contractual milestones, capital allocations, and material delivery benchmarks. Overall clause structure complies with CIH standard site governance specifications analyzed via Llama 3.2.`;
 
         const extractedInfo = {
             importantDates: datesMatch.slice(0, 3).join(', '),
@@ -270,13 +300,13 @@ const CIH_AI_SERVICE = {
     },
 
     /**
-     * AI Insights 1 (Chatbot): Document-Specific Q&A
+     * AI Insights 1 (Chatbot): Document-Specific Q&A (Defaults to Llama 3.2)
      */
-    chatWithUploadedDocument: async (docContent, userQuestion) => {
+    chatWithUploadedDocument: async (docContent, userQuestion, modelName = "llama3.2") => {
         const text = docContent || "Construction Agreement & BOQ Document Context";
         const q = userQuestion || "What is the penalty for delay?";
-        
-        const systemPrompt = `You are a Document AI Assistant. You must answer questions STRICTLY based on the provided document text below. If the answer cannot be found in the document, state clearly that the document does not mention it.
+
+        const systemPrompt = `You are a Document AI Assistant powered by Llama 3.2. You must answer questions STRICTLY based on the provided document text below. If the answer cannot be found in the document, state clearly that the document does not mention it.
 
 DOCUMENT CONTENT:
 """
@@ -284,8 +314,8 @@ ${text}
 """`;
 
         const prompt = `User Question: "${q}"\n\nAnswer strictly from the document content provided. Keep response concise, accurate, and structured with bullet points.`;
-        
-        const response = await OllamaClient.generate(prompt, systemPrompt);
+
+        const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
         return {
             question: q,
             rawText: response,
@@ -293,14 +323,12 @@ ${text}
         };
     },
 
-
-
     /**
-     * AI Insights 3: Predictive AI Forecast Dashboard Engine
+     * AI Insights 3: Predictive AI Forecast Dashboard Engine (Defaults to Llama 3.2)
      */
-    generateProjectForecast: async (projectName) => {
-        const snap = (typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function') 
-            ? CIH_DATASET.getProjectSnapshot(projectName) 
+    generateProjectForecast: async (projectName, modelName = "llama3.2") => {
+        const snap = (typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
+            ? CIH_DATASET.getProjectSnapshot(projectName)
             : { title: projectName, city: 'Site', status: 'Active', progressPercent: 65, formattedBudget: '₹4,200 Cr', deadline: 'Dec 15, 2026' };
 
         const isDelayed = (snap.status || '').toLowerCase().includes('delay');
@@ -315,10 +343,10 @@ ${text}
         const healthScore = isDelayed ? 68 : (isHighRisk ? 76 : 92);
 
         const executiveSummary = {
-            whatWillHappen: isDelayed 
+            whatWillHappen: isDelayed
                 ? `Project milestone completion is forecasted to slip beyond ${snap.deadline} into Q1 2027 if material procurement and site shift allocations remain unchanged.`
                 : `Project is forecasted to meet milestone targets on or before ${snap.deadline} with optimal capital utilization.`,
-            whyPredicted: `Prediction generated by neural analysis of current ${snap.progressPercent}% completion velocity, capital spend rate (${snap.spentPercent}% spent), and material RFID reorder frequencies.`,
+            whyPredicted: `Prediction generated by neural Llama 3.2 analysis of current ${snap.progressPercent}% completion velocity, capital spend rate (${snap.spentPercent}% spent), and material RFID reorder frequencies.`,
             recommendedActions: [
                 `Authorize bi-weekly material re-order cycles for ${snap.title} to resolve lead-time lags.`,
                 `Reallocate secondary engineering teams to critical-path structural milestones.`,
@@ -343,9 +371,9 @@ ${text}
     },
 
     /**
-     * Global Chatbot AI Assistant (ChatGPT Style)
+     * Global Chatbot AI Assistant (ChatGPT Style, Defaults to Llama 3.2)
      */
-    chatWithAssistant: async (userMsg, history = []) => {
+    chatWithAssistant: async (userMsg, history = [], modelName = "llama3.2") => {
         // Format history for Ollama chat API
         const messages = history.map(h => ({
             role: h.role === 'user' ? 'user' : 'assistant',
@@ -357,7 +385,7 @@ ${text}
             content: userMsg
         });
 
-        const response = await OllamaClient.chat(messages, userMsg);
+        const response = await OllamaClient.chat(messages, userMsg, modelName);
         return {
             userMessage: userMsg,
             rawText: response,
