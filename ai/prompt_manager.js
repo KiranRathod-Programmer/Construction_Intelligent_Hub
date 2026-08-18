@@ -328,5 +328,103 @@ FORMAT YOUR RESPONSE IN THE FOLLOWING STRUCTURE:
 1. **[Optimization Strategy 1]**: [Actionable PM cost saving tip]
 2. **[Optimization Strategy 2]**: [Actionable PM cost saving tip]
 3. **[Optimization Strategy 3]**: [Actionable PM cost saving tip]`;
+    },
+
+    /**
+     * Helper to auto-detect document preset type if not explicitly supplied
+     */
+    detectDocumentPreset: (docTitle = "", docContent = "") => {
+        const text = `${docTitle} ${docContent}`.toLowerCase();
+        if (text.includes("boq") || text.includes("bill of quantities") || text.includes("quantities bill") || text.includes("schedule of rates") || text.includes("sor")) {
+            return "boq";
+        }
+        if (text.includes("dpr") || text.includes("daily progress") || text.includes("site report") || text.includes("work completed today") || text.includes("manpower count") || text.includes("shift report")) {
+            return "dpr";
+        }
+        if (text.includes("contract") || text.includes("agreement") || text.includes("clauses") || text.includes("liquidated") || text.includes("liability") || text.includes("indemnity") || text.includes("subcontractor")) {
+            return "contract";
+        }
+        if (text.includes("invoice") || text.includes("tax invoice") || text.includes("bill to") || text.includes("amount payable") || text.includes("gstin") || text.includes("payment due")) {
+            return "invoice";
+        }
+        return "general";
+    },
+
+    /**
+     * AI Insights: Document Intelligence Prompt — unified executive report structure
+     */
+    documentAnalysis: (docTitle, docContent, presetType = "general") => {
+        const detectedType = presetType || CIH_PROMPTS.detectDocumentPreset(docTitle, docContent);
+        const title = docTitle || "Uploaded Construction Document";
+        const timestamp = new Date().toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric'
+        });
+        const rawContent = (docContent || "").trim();
+        const maxChars = 14000;
+        const truncatedNote = rawContent.length > maxChars
+            ? "\n\n[Document text truncated to fit model context. Analyze only the text provided.]"
+            : "";
+        const boundedContent = (rawContent.slice(0, maxChars) || "Not specified in document") + truncatedNote;
+
+        const typeHints = {
+            boq: "Bill of Quantities — emphasize quantities, unit rates, material specs, and cost totals found in the file.",
+            dpr: "Daily Progress Report — emphasize site activity, manpower, equipment, and delay logs found in the file.",
+            contract: "Legal Contract — emphasize clauses, penalties, milestones, liability, and governance found in the file.",
+            invoice: "Commercial Invoice — emphasize line items, taxes, vendor details, and payment terms found in the file.",
+            general: "General construction document — extract only contractual, technical, and operational facts present in the file."
+        };
+        const typeHint = typeHints[detectedType.toLowerCase()] || typeHints.general;
+
+        return `You are CIH Document Intelligence AI — a Senior Construction Contract Auditor and Chartered Cost Engineer.
+
+TASK:
+Analyze ONLY the uploaded document text below. Generate a structured executive intelligence report. Every fact, number, date, party, quantity, and clause MUST come from the document. Do not invent data, typical industry values, or missing clauses.
+
+DOCUMENT CONTEXT:
+Document Name: "${title}"
+Document Classification: ${detectedType.toUpperCase()}
+Analysis Date: ${timestamp}
+Document Type Focus: ${typeHint}
+
+FULL DOCUMENT TEXT:
+"""
+${boundedContent}
+"""
+
+STRICT RULES:
+1. Use ONLY information present in the document text above.
+2. If a heading has no relevant data in the document, write "Not specified in document" for that item. Do not guess.
+3. Do not mention APIs, databases, backends, or software architecture.
+4. Follow the EXACT section headings and order below. Do not add extra top-level sections.
+
+OUTPUT FORMAT (use this exact markdown structure):
+
+# Document Intelligence Report
+
+## Document Name
+${title}
+
+## Executive Summary
+[Write 2–3 paragraphs covering document purpose, scope, key parties, and critical findings — derived only from the uploaded text.]
+
+## Key Contractual Matrix & Specification
+[Bullet list drawn only from the document. Cover these items when present; otherwise write "Not specified in document":
+- Scope of work / deliverables
+- Key quantities, rates, or budget figures (quote values from the document)
+- Quality / material specifications and standards
+- Milestones, deadlines, and delivery schedules
+- Payment terms, penalties, and liquidated damages
+- Parties, references, and governing terms]
+
+## Identify Contract Risks
+[Each risk MUST be a bullet in this exact pattern:
+- **Risk:** [title] | **Severity:** High/Medium/Low | **Evidence:** [quote or paraphrase from document] | **Impact:** [consequence implied by the document]
+List only risks supported by the uploaded text.]
+
+## Practical Recommendation Set
+[Numbered list of 5–8 actionable recommendations. Each recommendation must reference a finding or risk from this document. Be specific for site engineers, quantity surveyors, and project directors.]
+
+---
+*Generated by Construction Intelligent Hub AI via local Ollama inference • ${timestamp}*`;
     }
 };

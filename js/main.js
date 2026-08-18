@@ -2035,10 +2035,14 @@ function downloadRiskAISummary() {
 }
 
 // ==========================================================================
-// AI INSIGHTS MODULE CONTROLLERS (REDESIGNED)
 // ==========================================================================
-let currentUploadedDocContent = `BOQ Contract Agreement: Completion target Dec 2026. Total contract value: ₹1,450 Cr. Material steel requirement: 4,200 Tons. Milestone delay penalty: 0.5% per week up to 10% maximum. Foundation: Pile foundation in deep clay. Waterproofing spec: 2-coat elastomeric membrane.`;
-let currentUploadedDocTitle = "Contractor Agreement & BOQ Document.pdf";
+// AI INSIGHTS MODULE CONTROLLERS (DOCUMENT INTELLIGENCE & FORECAST)
+// ==========================================================================
+let currentUploadedDocContent = null;
+let currentUploadedDocTitle = null;
+let currentUploadedDocPreset = null;
+let currentDocAnalysisReportText = null;
+let currentDocAnalysisData = null;
 let currentForecastReportData = null;
 
 function switchAiTab(tabName) {
@@ -2070,8 +2074,25 @@ function handleAIModelChange(modelName) {
     }
 }
 
+function updateDocGenerateButtonState(hasDocument) {
+    const btn = document.getElementById('btnGenerateDocSummary');
+    if (!btn) return;
+    if (hasDocument) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.innerHTML = '⚡ Generate';
+    } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.55';
+        btn.style.cursor = 'not-allowed';
+        btn.innerHTML = '⚡ Generate (upload a document first)';
+    }
+}
+
 function initAIInsightsPage() {
     switchAiTab('doc');
+    updateDocGenerateButtonState(false);
     const modelSelect = document.getElementById('ai-model-select');
     if (modelSelect && typeof OLLAMA_CONFIG !== 'undefined') {
         modelSelect.value = OLLAMA_CONFIG.defaultModel || OLLAMA_CONFIG.model || 'llama3.2';
@@ -2101,13 +2122,29 @@ async function handleDocFileUpload(event) {
 
     try {
         const extractedText = await CIH_AI_SERVICE.extractTextFromFile(file);
+        if (!extractedText || String(extractedText).trim().length < 40) {
+            throw new Error("Extracted text is empty or too short. Use a text-based PDF or TXT/CSV/JSON/MD file.");
+        }
         currentUploadedDocContent = extractedText;
+        currentUploadedDocPreset = (typeof CIH_PROMPTS !== 'undefined')
+            ? CIH_PROMPTS.detectDocumentPreset(file.name, extractedText)
+            : "general";
 
-        if (titleEl) titleEl.innerHTML = `📄 Uploaded: <strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB &bull; Click Generate button below)`;
+        currentDocAnalysisReportText = null;
+        currentDocAnalysisData = null;
+
+        if (titleEl) {
+            titleEl.innerHTML = `📄 Uploaded: <strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB &bull; Type: <em>${currentUploadedDocPreset.toUpperCase()}</em> &bull; Click "Generate" to analyze)`;
+        }
+        updateDocGenerateButtonState(true);
     } catch (err) {
         console.error("[Document Upload] Extraction failed:", err);
+        currentUploadedDocContent = null;
+        currentUploadedDocTitle = null;
+        currentUploadedDocPreset = null;
+        updateDocGenerateButtonState(false);
         if (titleEl) titleEl.innerHTML = `⚠️ Extraction error for <strong>${file.name}</strong>.`;
-        alert(`Failed to extract text from ${file.name}. Please ensure file is valid.`);
+        alert(`Failed to extract text from ${file.name}: ${err.message}`);
     }
 }
 
@@ -2116,29 +2153,101 @@ function selectPresetDocument(presetType) {
     const outputBox = document.getElementById('aiDocAnalysisOutput');
     if (outputBox) outputBox.style.display = 'none';
 
+    currentUploadedDocPreset = presetType;
+    currentDocAnalysisReportText = null;
+    currentDocAnalysisData = null;
+
     if (presetType === 'boq') {
         currentUploadedDocTitle = "BOQ_Quantities_Bill_of_Quantities.pdf";
-        currentUploadedDocContent = "BOQ Specification Document: Total estimated quantity Cement 85,000 Bags, Steel Rebar 4,200 Tons, Sand 1,800 m3, Concrete Grade M35 12,500 m3. Total budget allocation ₹1,450 Cr. Target delivery milestone: Nov 2026. Quality penalty: 0.5% per week delay.";
+        currentUploadedDocContent = `BOQ Specification Document - Metro Viaduct Package:
+Total estimated material and cost requirements:
+- Cement OPC 53 Grade: 85,000 Bags (@ ₹410/bag = ₹34,850,000)
+- High-Yield Fe500D TMT Steel Rebar: 4,200 Metric Tons (@ ₹63,500/MT = ₹266,700,000)
+- M-Sand (Zone-II Double Washed): 1,800 m3 (@ ₹1,950/m3 = ₹3,510,000)
+- Ready-Mix Concrete Grade M35: 12,500 m3 (@ ₹6,200/m3 = ₹77,500,000)
+- Graded Blue Metal Coarse Aggregates (20mm): 2,400 m3 (@ ₹1,480/m3 = ₹3,552,000)
+- Structural Waterproofing Compound: 8,500 Litres (@ ₹680/L = ₹5,780,000)
+Total Project Allocated Budget: ₹1,450 Cr.
+Target Completion Milestone: Nov 30, 2026.
+Quality Compliance Penalty: 0.5% per week delay up to max 10%.`;
     } else if (presetType === 'dpr') {
         currentUploadedDocTitle = "DPR_Daily_Progress_Report_Site.pdf";
-        currentUploadedDocContent = "Daily Progress Report (DPR): Excavation phase 92% completed. Pile foundation casting in progress. Workforce active: 48 site personnel. Material stock alert: Cement stock low (re-order level 500 bags). Rain delay recorded: 3.5 hours on South pier.";
+        currentUploadedDocContent = `Site Daily Progress Report (DPR) - Pier Casting Phase:
+Shift Date: March 14, 2026 | Site: Metro Corridor North Pier Zone
+1. Work Completed Today:
+- Excavation for foundation raft completed (100% of Grid-C).
+- Formwork erection and reinforcement rebar tying on Pier #14 finished.
+- First stage mass concrete pour completed for 120 m3 of M40 grade.
+2. Active Workforce Allocation:
+- Total manpower deployed: 48 site personnel.
+- Breakdown: 4 civil supervisory engineers, 2 QA/QC inspectors, 6 rebar fitters, 24 masonry/shuttering workers, 10 plant/equipment operators, 2 safety stewards.
+3. Equipment & Machinery Fleet:
+- 2x CAT 320D Hydraulic Excavators (Operating: 7.2 hrs, Fuel: 16 L/hr)
+- 3x 8m3 Transit Concrete Mixers (Active)
+- 1x Zoomlion 50T Tower Crane (Operating: 6.5 hrs)
+- 2x Submersible dewatering pumps (Continuous)
+4. Reported Delays & Blocker Logs:
+- Weather interruption: 3.5 hours rain delay in morning shift.
+- Material stock alert: Cement stock down to 420 bags (below safety threshold 500 bags; reorder needed). Zero safety incidents recorded.`;
     } else if (presetType === 'contract') {
         currentUploadedDocTitle = "Contractor_Legal_Agreement.pdf";
-        currentUploadedDocContent = "Contractor Agreement: Completion deadline set for Dec 15, 2026. Liquidated delay damages clause: 0.5% of total contract value per week of delay up to maximum 10%. Scope variation requires 14-day advance engineering notice.";
+        currentUploadedDocContent = `Master EPC Contractor Legal Agreement:
+Contract Ref: CIH-METRO-EPC-2026-09
+Parties: Construction Intelligent Hub Infrastructure Ltd. (Employer) and Apex Engineering Consortium (Contractor).
+1. Scope & Execution:
+- Complete engineering, procurement, and construction of 8.4 km elevated rapid transit viaduct.
+- Target scheduled handover deadline: Dec 15, 2026.
+2. Liquidated Damages & Penalties:
+- Liquidated delay damages clause enforced at 0.5% of total contract value per week of unexcused delay.
+- Maximum aggregate liquidated damages cap: 10% of total contract value.
+3. Scope Variation Protocol:
+- Scope change orders require 14 days advance written engineering notice with cost impact analysis.
+4. Liability Caps & Indemnity:
+- Contractor overall liability capped at 100% of contract value.
+- Comprehensive third-party general liability insurance coverage mandated.
+5. Governing Law: High Court of Delhi Jurisdiction.`;
     } else if (presetType === 'invoice') {
         currentUploadedDocTitle = "Material_Supply_Tax_Invoice.pdf";
-        currentUploadedDocContent = "Tax Invoice #INV-2026-8841: Supplier Apex Steel Ltd. Material High-Grade TMT Rebar 500D 120 Tons delivered to site. Amount: ₹84,500,000. Payment terms: Net 30 days. Quality audit status: Verified ISO-9001 compliance.";
+        currentUploadedDocContent = `Commercial Tax Invoice & Supply Certificate:
+Invoice Number: INV-2026-8841 | Date: March 10, 2026
+Vendor: Apex Steel & Infrastructure Supplies Ltd.
+GSTIN: 27AAACA0000A1Z5 | PAN: AAACA0000A
+Billed To: Construction Intelligent Hub - Site Depot #4
+Line Items:
+1. High-Grade TMT Rebar Fe500D (12mm-25mm) - 120 MT @ ₹63,500/MT = ₹7,620,000
+2. Binding Wire (18 Gauge) - 2.5 MT @ ₹72,000/MT = ₹180,000
+Net Subtotal: ₹7,800,000
+CGST (9%): ₹702,000
+SGST (9%): ₹702,000
+Grand Total Amount Payable: ₹9,204,000 (INR Nine Million Two Hundred Four Thousand Only)
+Payment Terms: Net 30 Days from site delivery and physical QC verification.
+Due Date: April 09, 2026.
+Quality Verification: Batch test certificate attached & ISO-9001 certified.`;
     }
 
-    if (titleEl) titleEl.innerHTML = `📄 Preset Selected: <strong>${currentUploadedDocTitle}</strong> (Click Generate button below)`;
+    if (titleEl) {
+        titleEl.innerHTML = `📄 Preset Selected: <strong>${currentUploadedDocTitle}</strong> (Type: <em>${presetType.toUpperCase()}</em> &bull; Click "Generate" below)`;
+    }
+    updateDocGenerateButtonState(true);
 }
 
 let currentDocTypewriterInterval = null;
 
 async function triggerDocSummaryAndRecommendations() {
+    // 1. Upload Gating Rule: Verify valid document exists
+    if (!currentUploadedDocContent || !currentUploadedDocContent.trim()) {
+        alert("⚠️ Please upload a document or select a sample preset first before generating AI Insights.");
+        const titleEl = document.getElementById('aiDocCurrentTitle');
+        if (titleEl) {
+            titleEl.innerHTML = `<span style="color: #EF4444; font-weight: 700;">⚠️ Please upload a file (PDF/TXT/CSV/JSON) or click a sample preset first.</span>`;
+        }
+        return;
+    }
+
     const outputBox = document.getElementById('aiDocAnalysisOutput');
     const textContentEl = document.getElementById('typewriterTextContent');
     const badgeEl = document.getElementById('typewriterStatusBadge');
+    const modelSelect = document.getElementById('ai-model-select');
 
     if (!outputBox || !textContentEl) return;
 
@@ -2147,69 +2256,109 @@ async function triggerDocSummaryAndRecommendations() {
         outputBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
 
-    if (badgeEl) badgeEl.innerText = '[STATUS: GENERATING WITH LLAMA 3.2...]';
-    textContentEl.textContent = 'Extracting document text & analyzing with Llama 3.2...\n';
+    const activeModel = (modelSelect && modelSelect.value) ? modelSelect.value : "llama3.2";
 
-    const res = await CIH_AI_SERVICE.analyzeUploadedDocument(currentUploadedDocTitle, currentUploadedDocContent);
-
-    const reportText = `================================================================================
-DOCUMENT: ${res.docTitle}
-RISK EVALUATION: [${res.riskLevel}]
-================================================================================
-
---------------------------------------------------------------------------------
-1. CONCISE EXECUTIVE SUMMARY
---------------------------------------------------------------------------------
-${res.summary}
-
---------------------------------------------------------------------------------
-2. KEY CONTRACTUAL METRICS & SPECIFICATIONS
---------------------------------------------------------------------------------
-• Target Dates        : ${res.extractedInfo.importantDates}
-• Total Budget / Cost : ${res.extractedInfo.costs}
-• Quantities Tracked  : ${res.extractedInfo.quantities}
-• Delivery Milestones : ${res.extractedInfo.milestones}
-
---------------------------------------------------------------------------------
-3. IDENTIFIED CONTRACT CLAUSE RISKS
---------------------------------------------------------------------------------
-${res.risks.map((r, i) => `[RISK ${i + 1}] ${r}`).join('\n')}
-
---------------------------------------------------------------------------------
-4. PRACTICAL RECOMMENDATIONS FOR PROJECT MANAGERS
---------------------------------------------------------------------------------
-1. Audit physical material inventory against BOQ delivery quantities before signing payment releases.
-2. Verify structural concrete curing schedules and non-destructive strength test logs on-site.
-3. Review liquidated delay penalty terms (0.5%/week) and file milestone extension notices 14 days in advance.
-4. Ensure heavy equipment IoT sensors are active to prevent unrecorded operational downtime.
-
-================================================================================
-End of Executive AI Summary - Construction Intelligent Hub 2026
-================================================================================`;
-
-    if (currentDocTypewriterInterval) {
-        clearInterval(currentDocTypewriterInterval);
-        currentDocTypewriterInterval = null;
+    const generateBtn = document.getElementById('btnGenerateDocSummary');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = '0.55';
+        generateBtn.innerHTML = '⏳ Generating with Ollama...';
     }
 
-    textContentEl.textContent = '';
-    let charIndex = 0;
+    if (badgeEl) badgeEl.innerText = `[STATUS: GENERATING WITH ${activeModel.toUpperCase()}...]`;
+    textContentEl.textContent = `Using uploaded document "${currentUploadedDocTitle}" as context.\nCalling local Ollama (${activeModel}). No offline mock will be used.\n`;
+    currentDocAnalysisReportText = null;
+    currentDocAnalysisData = null;
 
-    currentDocTypewriterInterval = setInterval(() => {
-        if (charIndex < reportText.length) {
-            textContentEl.textContent = reportText.substring(0, charIndex + 2) + '❚';
-            charIndex += 2;
-        } else {
+    try {
+        const res = await CIH_AI_SERVICE.analyzeUploadedDocument(
+            currentUploadedDocTitle,
+            currentUploadedDocContent,
+            activeModel,
+            currentUploadedDocPreset
+        );
+
+        currentDocAnalysisReportText = res.rawText;
+        currentDocAnalysisData = res;
+
+        if (currentDocTypewriterInterval) {
             clearInterval(currentDocTypewriterInterval);
             currentDocTypewriterInterval = null;
-            textContentEl.textContent = reportText;
-            if (badgeEl) badgeEl.innerText = '[STATUS: COMPLETE]';
         }
-    }, 6);
+
+        textContentEl.textContent = '';
+        let charIndex = 0;
+        const reportText = res.rawText;
+
+        currentDocTypewriterInterval = setInterval(() => {
+            if (charIndex < reportText.length) {
+                textContentEl.textContent = reportText.substring(0, charIndex + 4) + '❚';
+                charIndex += 4;
+            } else {
+                clearInterval(currentDocTypewriterInterval);
+                currentDocTypewriterInterval = null;
+                textContentEl.textContent = reportText;
+                if (badgeEl) badgeEl.innerText = '[STATUS: COMPLETE]';
+                updateDocGenerateButtonState(true);
+            }
+        }, 8);
+
+    } catch (err) {
+        console.error("[Document AI Analysis] Generation failed:", err);
+        if (badgeEl) badgeEl.innerText = '[STATUS: ERROR]';
+        textContentEl.textContent = `⚠️ Document Intelligence requires a live Ollama instance.\n\n${err.message}\n\nStart Ollama locally, confirm the selected model is available, then click Generate again.\nOffline mock reports are disabled for this module.`;
+        updateDocGenerateButtonState(true);
+    }
 }
 
 function runDocumentAnalysis() {
     triggerDocSummaryAndRecommendations();
+}
+
+/**
+ * DOWNLOAD, EXPORT PDF & COPY HANDLERS FOR DOCUMENT AI
+ */
+function downloadDocAISummary() {
+    if (!currentDocAnalysisReportText) {
+        alert("Please generate an AI executive summary first before downloading.");
+        return;
+    }
+    const stem = (currentUploadedDocTitle || 'Document').replace(/\.[^/.]+$/, '');
+    const cleanDocName = stem.replace(/[^a-zA-Z0-9_-]/g, '_') || 'Document';
+    const fileName = `${cleanDocName}_AI_Insights_Report.txt`;
+    AIUtils.downloadAsFile(fileName, currentDocAnalysisReportText, "text/plain");
+}
+
+function printDocAISummary() {
+    if (!currentDocAnalysisReportText) {
+        alert("Please generate an AI executive summary first.");
+        return;
+    }
+    const title = `CIH AI Intelligence Report - ${currentUploadedDocTitle || 'Document'}`;
+    const htmlContent = currentDocAnalysisData?.html || AIUtils.formatMarkdownToHTML(currentDocAnalysisReportText);
+    AIUtils.printAsPDF(title, htmlContent);
+}
+
+function copyDocAISummary() {
+    if (!currentDocAnalysisReportText) {
+        alert("Please generate an AI executive summary first.");
+        return;
+    }
+    navigator.clipboard.writeText(currentDocAnalysisReportText).then(() => {
+        const btn = document.getElementById('btnCopyDocSummary');
+        if (btn) {
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "✓ Copied!";
+            btn.style.background = "#059669";
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.style.background = "#334155";
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error("Clipboard copy failed:", err);
+        alert("Failed to copy to clipboard.");
+    });
 }
 
 async function sendDocChatMessage() {

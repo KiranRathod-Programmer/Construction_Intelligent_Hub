@@ -51,20 +51,29 @@ const OllamaClient = {
      * Send prompt to Ollama /api/generate endpoint
      * Defaults to Llama 3.2 (llama3.2)
      */
-    generate: async (prompt, systemPrompt = "", modelName = "") => {
+    generate: async (prompt, systemPrompt = "", modelName = "", ollamaOnly = false, extraOptions = null) => {
         const endpoint = OllamaClient.getEndpoint();
         const activeModel = modelName || OllamaClient.getDefaultModel();
         const isHealthy = await OllamaClient.checkHealth(endpoint);
 
-        if (!isHealthy && (typeof OLLAMA_CONFIG === 'undefined' || OLLAMA_CONFIG.fallbackEnabled)) {
-            console.warn(`[CIH AI Engine] Local Ollama daemon unreachable at ${endpoint}. Utilizing local fallback engine (Llama 3.2 emulation).`);
-            return OllamaClient._getOfflineFallbackResponse(prompt);
+        if (!isHealthy) {
+            if (ollamaOnly) {
+                throw new Error("Ollama is not running. Start Ollama locally (ollama serve) with your selected model, then click Generate again.");
+            }
+            if (typeof OLLAMA_CONFIG === 'undefined' || OLLAMA_CONFIG.fallbackEnabled) {
+                console.warn(`[CIH AI Engine] Local Ollama daemon unreachable at ${endpoint}. Utilizing local fallback engine (Llama 3.2 emulation).`);
+                return OllamaClient._getOfflineFallbackResponse(prompt);
+            }
         }
 
         try {
-            const timeout = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.timeoutMs) ? OLLAMA_CONFIG.timeoutMs : 35000;
-            const options = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.options) ? OLLAMA_CONFIG.options : { temperature: 0.7, top_p: 0.9, num_predict: 800 };
-            
+            const baseTimeout = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.timeoutMs) ? OLLAMA_CONFIG.timeoutMs : 35000;
+            const timeout = ollamaOnly ? Math.max(baseTimeout, 180000) : baseTimeout;
+            const baseOptions = (typeof OLLAMA_CONFIG !== 'undefined' && OLLAMA_CONFIG.options)
+                ? OLLAMA_CONFIG.options
+                : { temperature: 0.7, top_p: 0.9, num_predict: 800 };
+            const options = extraOptions ? { ...baseOptions, ...extraOptions } : baseOptions;
+
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -86,12 +95,18 @@ const OllamaClient = {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
-                throw new Error(`Ollama API error: ${response.statusText}`);
+                throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
             return data.response;
         } catch (err) {
+            if (ollamaOnly) {
+                const msg = err && err.name === 'AbortError'
+                    ? `Ollama timed out while generating the document report. Try a smaller file or a faster local model.`
+                    : (err.message || 'Unknown error');
+                throw new Error(`Ollama request failed: ${msg}. Document analysis requires a live Ollama instance (no offline mock).`);
+            }
             console.warn("[CIH AI Engine] Ollama request failed or timed out. Falling back to local Llama 3.2 fallback engine.", err);
             return OllamaClient._getOfflineFallbackResponse(prompt);
         }
@@ -162,7 +177,11 @@ const OllamaClient = {
         const lower = (prompt || "").toLowerCase().trim();
         const dataset = (typeof CIH_DATASET !== 'undefined') ? CIH_DATASET : null;
 
-        // 0. MATERIAL ESTIMATION & QUANTITY SURVEYING PROMPT
+        // Document Intelligence is Ollama-only — never emit a mock document report.
+        if (lower.includes("cih document intelligence") || lower.includes("document intelligence report") || lower.includes("full document text:") || lower.includes("key contractual matrix")) {
+            return "Ollama is not running. Document Intelligence requires a live local Ollama model. Start Ollama and click Generate again. Offline mock reports are disabled for this module.";
+        }
+        // 0B. MATERIAL ESTIMATION & QUANTITY SURVEYING PROMPT
         if (lower.includes("cih material ai") || lower.includes("material estimation report") || lower.includes("material requirement breakdown") || lower.includes("tasks: estimate material quantities")) {
             // Extract parameters from prompt text if available
             const projMatch = prompt.match(/Project:\s*([^|\n]+)/i);

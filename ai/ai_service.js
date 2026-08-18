@@ -98,7 +98,11 @@ const CIH_AI_SERVICE = {
                 .replace(/stream[\s\S]*?endstream/g, ' ')
                 .trim();
 
-            return cleanedText.length > 50 ? cleanedText.substring(0, 15000) : `[PDF Document: ${file.name}] Section text parsed for Llama 3.2 contract evaluation.`;
+            if (cleanedText.length > 80) {
+                return cleanedText.substring(0, 15000);
+            }
+
+            throw new Error(`Could not extract readable text from PDF "${file.name}". Try a text-based PDF or a TXT/CSV/JSON/MD file.`);
         } else {
             // Text-based files (.txt, .json, .csv, .md)
             return new Promise((resolve, reject) => {
@@ -247,55 +251,37 @@ ABSOLUTE RULES — NEVER VIOLATE:
     },
 
     /**
-     * AI Insights 1: PDF & Construction Document Analyzer (Defaults to Llama 3.2)
+     * AI Insights 1: PDF & Construction Document Analyzer (Mandates Llama 3.2)
      */
-    analyzeUploadedDocument: async (docTitle, docContent, modelName = "llama3.2") => {
-        const title = docTitle || "Construction Agreement / BOQ Document";
-        const text = (docContent && docContent.trim()) ? docContent.trim() : "BOQ Contract Agreement: Completion target Dec 2026. Total contract value: ₹1,450 Cr. Material steel requirement: 4,200 Tons. Milestone delay penalty: 0.5% per week up to 10% maximum.";
+    analyzeUploadedDocument: async (docTitle, docContent, modelName = "llama3.2", presetType = null) => {
+        const title = docTitle || "Uploaded Construction Document";
+        const text = (docContent && String(docContent).trim()) ? String(docContent).trim() : "";
 
-        const lower = text.toLowerCase();
-
-        const datesMatch = text.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4})/gi) || ['Dec 2026'];
-        const costMatch = text.match(/(₹\s*[\d,]+(?:\s*cr|\s*lakh)?|\$[\d,]+|\d+(?:,\d+)*(?:\s*cr|\s*lakh))/gi) || ['₹1,450 Cr'];
-        const qtyMatch = text.match(/(\d+(?:,\d+)*(?:\s*tons|\s*sq\.?\s*ft|\s*m3|\s*liters|\s*bags|\s*units|\s*%))/gi) || ['4,200 Tons', '0.5% per week penalty'];
-
-        let riskLevel = "LOW RISK";
-        let riskBg = "#DCFCE7";
-        let riskColor = "#10B981";
-
-        if (lower.includes("penalty") || lower.includes("liquidated") || lower.includes("breach") || lower.includes("terminate") || lower.includes("overrun") || lower.includes("discrepancy")) {
-            riskLevel = "HIGH RISK IDENTIFIED";
-            riskBg = "#FEE2E2";
-            riskColor = "#EF4444";
-        } else if (lower.includes("warranty") || lower.includes("variation") || lower.includes("extension") || lower.includes("revision")) {
-            riskLevel = "MODERATE RISK";
-            riskBg = "#FEF3C7";
-            riskColor = "#D97706";
+        if (!text) {
+            throw new Error("No document content provided for analysis. Upload a readable PDF/TXT/CSV/JSON/MD file first.");
         }
 
-        const summary = `Extracted document context for "${title}" specifies core contractual milestones, capital allocations, and material delivery benchmarks. Overall clause structure complies with CIH standard site governance specifications analyzed via Llama 3.2.`;
+        const detectedPreset = presetType || (typeof CIH_PROMPTS !== 'undefined' ? CIH_PROMPTS.detectDocumentPreset(title, text) : "general");
+        const prompt = CIH_PROMPTS.documentAnalysis(title, text, detectedPreset);
+        const systemPrompt = `You are CIH Document Intelligence AI — a Senior Construction Contract Auditor and Chartered Cost Engineer. Analyze only the uploaded document text. Never invent facts, rates, parties, or clauses. If information is missing, write "Not specified in document". Output the exact markdown headings requested in the user prompt.`;
 
-        const extractedInfo = {
-            importantDates: datesMatch.slice(0, 3).join(', '),
-            costs: costMatch.slice(0, 3).join(', '),
-            quantities: qtyMatch.slice(0, 4).join(', '),
-            milestones: `Target completion deadline ${datesMatch[0] || 'Dec 2026'} with milestone delivery phases.`
-        };
+        const activeModel = modelName || "llama3.2";
+        const response = await OllamaClient.generate(prompt, systemPrompt, activeModel, true, {
+            temperature: 0.2,
+            top_p: 0.9,
+            num_predict: 1800
+        });
 
-        const risks = [
-            lower.includes("penalty") ? "Liquidated delay damages clause enforced for schedule slippage." : "Standard schedule milestone compliance target.",
-            lower.includes("variation") ? "Scope variation clause requires advance engineering review." : "Strict specification standards for material quality and testing."
-        ];
+        if (!response || !String(response).trim()) {
+            throw new Error("Ollama returned an empty report. Ensure the selected model is pulled and try Generate again.");
+        }
 
         return {
             docTitle: title,
-            rawText: text,
-            summary: summary,
-            extractedInfo: extractedInfo,
-            riskLevel: riskLevel,
-            riskBg: riskBg,
-            riskColor: riskColor,
-            risks: risks
+            presetType: detectedPreset,
+            prompt: prompt,
+            rawText: String(response).trim(),
+            html: AIUtils.formatMarkdownToHTML(response)
         };
     },
 
