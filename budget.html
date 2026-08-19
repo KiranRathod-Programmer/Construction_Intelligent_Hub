@@ -60,10 +60,6 @@
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <select class="dash-btn-filter" id="budgetProjectFilter" onchange="filterBudgetByProject()" style="padding: 9px 14px; font-weight: 600; background: #FFFFFF;">
                         <option value="all">📁 All Projects (Portfolio Overview)</option>
-                        <option value="Delhi Metro - Phase 4">🚆 Delhi Metro - Phase 4</option>
-                        <option value="Mumbai Trans Harbour">📄 Mumbai Trans Harbour</option>
-                        <option value="Indore Smart City Hub">🏢 Indore Smart City Hub</option>
-                        <option value="International Terminal Exp.">✈️ International Terminal Exp.</option>
                     </select>
 
                     <button class="kpi-btn-secondary" onclick="openModal('aiBudgetEstimatorModal')" style="background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; font-weight: 700; padding: 9px 16px;">
@@ -85,18 +81,18 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">TOTAL BUDGET</div>
-                        <div class="kpi-value">₹35,450 Cr</div>
+                        <div class="kpi-value" id="kpiBudgetTotal">—</div>
                     </div>
                 </div>
 
                 <div class="kpi-card">
                     <div class="kpi-card-header">
                         <div class="kpi-icon-box" style="background: #E0F2FE; color: #0284C7;">💳</div>
-                        <span class="kpi-badge badge-slate">51% Utilized</span>
+                        <span class="kpi-badge badge-slate" id="kpiBudgetUtilBadge">Utilized</span>
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">TOTAL SPENT</div>
-                        <div class="kpi-value" style="color: #2563EB;">₹18,200 Cr</div>
+                        <div class="kpi-value" id="kpiBudgetSpent" style="color: #2563EB;">—</div>
                     </div>
                 </div>
 
@@ -107,18 +103,18 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">CONTINGENCY RESERVE</div>
-                        <div class="kpi-value" style="color: #059669;">₹4,800 Cr</div>
+                        <div class="kpi-value" id="kpiBudgetReserve" style="color: #059669;">—</div>
                     </div>
                 </div>
 
                 <div class="kpi-card">
                     <div class="kpi-card-header">
                         <div class="kpi-icon-box" style="background: #FEF3C7; color: #D97706;">📈</div>
-                        <span class="kpi-badge badge-amber">+1.8% Forecast</span>
+                        <span class="kpi-badge badge-amber" id="kpiBudgetOverrunBadge">Forecast</span>
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">COST OVERRUN RISK</div>
-                        <div class="kpi-value" style="color: #D97706;">Low Risk</div>
+                        <div class="kpi-value" id="kpiBudgetOverrun" style="color: #D97706;">—</div>
                     </div>
                 </div>
             </div>
@@ -261,10 +257,6 @@
             <div class="form-group">
                 <label class="form-label">Assigned Project</label>
                 <select class="form-input" id="expProj">
-                    <option value="Delhi Metro - Phase 4">Delhi Metro - Phase 4</option>
-                    <option value="Mumbai Trans Harbour">Mumbai Trans Harbour</option>
-                    <option value="Indore Smart City Hub">Indore Smart City Hub</option>
-                    <option value="International Terminal Exp.">International Terminal Exp.</option>
                 </select>
             </div>
 
@@ -319,13 +311,13 @@
 
     <!-- AI MODULE SCRIPTS -->
     <script src="ai/config.js?v=19.0"></script>
-    <script src="ai/ollama_client.js?v=19.0"></script>
-    <script src="ai/prompt_manager.js?v=19.0"></script>
+    <script src="ai/ollama_client.js?v=30.0"></script>
+    <script src="ai/prompt_manager.js?v=30.0"></script>
     <script src="ai/utils.js?v=19.0"></script>
-    <script src="ai/ai_service.js?v=19.0"></script>
+    <script src="ai/ai_service.js?v=30.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=19.0"></script>
-    <script src="js/main.js?v=19.0"></script>
+    <script src="js/data.js?v=30.0"></script>
+    <script src="js/main.js?v=30.0"></script>
 </body>
 </html>

@@ -13,61 +13,69 @@ const CIH_PROMPTS = {
     getLiveWebappContext: () => {
         if (typeof CIH_DATASET === 'undefined') return '';
 
+        const fmt = (n) => (typeof cihFormatMoney === 'function' ? cihFormatMoney(n) : n);
+        const titleOf = (id) => (typeof cihProjectTitle === 'function' ? cihProjectTitle(id) : id);
+        const matStatus = (m) => (typeof cihMaterialStatus === 'function' ? cihMaterialStatus(m).status : '');
+
         const projects = (CIH_DATASET.projects || []).map(p =>
-            `- Project: "${p.title}" (ID: ${p.id}) | Location: ${p.city} | Status: ${p.status} | Budget: ${p.formattedBudget} (₹${p.budgetCrores} Cr) | Deadline: ${p.deadline} | Progress: ${p.progressPercent}% | Risk Level: ${p.riskLevel || 'Low'} | Team Size: ${p.totalTeamCount}`
+            `- Project: "${p.title}" (ID: ${p.id}) | Client: ${p.client || '—'} | Location: ${p.city} | Status: ${p.status} | Budget: ${p.formattedBudget || fmt(p.budget)} | Spent: ${p.formattedSpent || fmt(p.spent)} (${p.spentPercent || 0}%) | Deadline: ${p.formattedDeadline || p.deadline} | Progress: ${p.progressPercent}% | Risk Level: ${p.riskLevel || 'Low'} | Team Size: ${p.totalTeamCount}`
         ).join('\n');
 
         const stats = CIH_DATASET.dashboardStats || {};
-        const statsSummary = `Portfolio Summary: ${stats.totalProjects?.count || 10} Total Active Projects (${stats.running?.count || 6} Running, ${stats.delayed?.count || 2} Delayed, ${stats.highRisk?.count || 2} High Risk, ${stats.completed?.count || 118} Historical Completed). Total Portfolio Budget: ₹94,830 Cr. Total Spent: ₹47,215 Cr.`;
-
-        const materials = (CIH_DATASET.materialInventory || []).map(m =>
-            `- Material: "${m.name}" | Stock: ${m.stockQuantity} | Reorder Threshold: ${m.reorderLevel} | Status: ${m.status} | Assigned Project: "${m.assignedProject}" | Supplier: ${m.supplier} | RFID Tag: ${m.rfidTag} | Utilization: ${m.utilizationPercent}%`
-        ).join('\n');
-
         const budget = CIH_DATASET.budgetOverview || {};
-        const expenses = (budget.expensesList || []).map(e =>
-            `- Expense: "${e.title}" | Project: "${e.project}" | Category: ${e.category} | Amount: ${e.amount} | Status: ${e.status} | Date: ${e.date}`
-        ).join('\n');
-        const budgetSummary = `Financial State: Total Allocated Portfolio Budget = ${budget.totalPortfolioBudget || '₹94,830 Cr'} | Total Spent = ${budget.totalSpent || '₹47,215 Cr'} | Remaining Budget = ${budget.remainingBudget || '₹47,615 Cr'} | Variance: ${budget.variancePercent || '+1.2%'}\nLogged Expense Transactions:\n${expenses}`;
+        const statsSummary = `Portfolio Summary: ${stats.totalProjects?.count ?? 0} Total Active Projects (${stats.running?.count ?? 0} Running, ${stats.delayed?.count ?? 0} On Hold/Delayed, ${stats.highRisk?.count ?? 0} High Risk, ${stats.completed?.count ?? 0} Completed). Total Portfolio Budget: ${budget.totalPortfolioBudget || '—'} | Total Spent: ${budget.totalSpent || '—'} | Remaining: ${budget.remainingBudget || '—'} | Variance: ${budget.variancePercent || '0%'}.`;
 
-        const equipment = (CIH_DATASET.equipmentAssets || []).map(e =>
-            `- Heavy Machine: "${e.asset_name}" (${e.unit_code}) | Project: "${e.assigned_project_id}" | Health: ${e.engine_health_pct}% | Operating Hours: ${e.operating_hours} hrs | Fuel Rate: ${e.fuel_rate_lph} | Maintenance Due: ${e.maintenance_due_hrs} hrs | Status: ${e.status} | Operator: ${e.operator}`
+        const materials = (CIH_DATASET.materials || []).map(m =>
+            `- Material: "${m.itemName}" | Project: "${titleOf(m.projectId)}" | Stock: ${m.quantityInStock} ${m.unit} / Required: ${m.quantityRequired} ${m.unit} | Unit Price: ${fmt(m.unitPrice)} | Status: ${matStatus(m)} | Supplier: ${m.supplier}`
         ).join('\n');
 
-        const team = (CIH_DATASET.teamMembers || []).map(t =>
-            `- Team Member: "${t.name}" | Role: ${t.role} (${t.category}) | Project: "${t.assignedProject}" | Email: ${t.email} | Phone: ${t.phone} | Access Level: ${t.accessLevel}`
+        const expenses = (CIH_DATASET.expenses || []).map(e =>
+            `- Expense: "${e.title || e.vendor}" | Project: "${titleOf(e.projectId)}" | Category: ${e.category} | Amount: ${fmt(e.amount)} | Status: ${e.paymentStatus} | Date: ${e.date} | Vendor: ${e.vendor}`
+        ).join('\n');
+        const budgetSummary = `Financial State: Total Allocated = ${budget.totalPortfolioBudget} | Total Spent = ${budget.totalSpent} | Remaining = ${budget.remainingBudget} | Variance: ${budget.variancePercent} | Overrun Risk: ${budget.overrunRisk}\nLogged Expense Transactions:\n${expenses}`;
+
+        const equipment = (CIH_DATASET.equipment || []).map(e =>
+            `- Heavy Machine: "${e.assetName}" (${e.unitCode}) | Project: "${titleOf(e.projectId)}" | Health: ${e.engineHealthPct}% | Operating Hours: ${e.operatingHours} hrs | Fuel Rate: ${e.fuelRateLph} L/hr | Maintenance Due: ${e.maintenanceDueHrs} hrs | Status: ${e.status} | Operator: ${e.operator}`
         ).join('\n');
 
-        const reports = (CIH_DATASET.projectReports || []).map(r =>
-            `- Report: "${r.report_title}" (${r.report_id}) | Type: ${r.report_type} | Project: "${r.assigned_project_id}" | Author: ${r.generated_by} | Date: ${r.generated_date} | Format: ${r.format}`
+        const team = (CIH_DATASET.team || []).map(t =>
+            `- Team Member: "${t.name}" | Role: ${t.role} (${t.category || '—'}) | Projects: ${(t.assignedProjects || []).map(titleOf).join(', ') || 'Unassigned'} | Email: ${t.email} | Phone: ${t.phone || '—'} | Access Level: ${t.accessLevel || '—'}`
         ).join('\n');
 
-        const risks = (CIH_DATASET.riskIncidents || []).map(r =>
-            `- Risk Incident (${r.incident_id}): Project "${r.project_name}" | Category: ${r.risk_category} | Level: ${r.risk_level} | Impact: ${r.predicted_delay_days} days delay & ₹${r.impact_cost_crores} Cr cost | Mitigation: ${r.mitigation_status} | Description: ${r.description}`
+        const reports = (CIH_DATASET.reports || []).map(r =>
+            `- Report: "${r.reportTitle}" (${r.id}) | Type: ${r.reportType} | Project: "${titleOf(r.projectId)}" | Author: ${r.generatedBy} | Date: ${r.generatedDate} | Format: ${r.format}`
         ).join('\n');
+
+        const risks = (CIH_DATASET.risks || []).map(r =>
+            `- Risk (${r.id}): "${r.riskTitle}" | Project: "${titleOf(r.projectId)}" | Category: ${r.category} | Probability: ${r.probability} | Impact: ${r.impact} | Severity: ${r.severityScore} | Status: ${r.status} | Owner: ${r.assignedTo} | Mitigation: ${r.mitigationPlan}`
+        ).join('\n');
+
+        const settings = CIH_DATASET.settings || {};
+        const settingsLine = `Company: ${settings.companyName || 'CIH'} | Address: ${settings.companyAddress || '—'} | Currency: ${settings.currency || 'INR'} | Tax: ${settings.taxRatePct || 0}% | Labor rate/day: ${fmt(settings.laborRatePerDay || 0)}`;
 
         return `REAL-TIME APPLICATION CONTEXT DATASET:
+${settingsLine}
 ${statsSummary}
 
 ACTIVE INFRASTRUCTURE PROJECTS (${(CIH_DATASET.projects || []).length}):
 ${projects}
 
-RISK INCIDENTS & DELAY ALERTS (${(CIH_DATASET.riskIncidents || []).length}):
+RISK REGISTER (${(CIH_DATASET.risks || []).length}):
 ${risks}
 
-MATERIAL INVENTORY (${(CIH_DATASET.materialInventory || []).length}):
+MATERIAL INVENTORY (${(CIH_DATASET.materials || []).length}):
 ${materials}
 
 BUDGET & EXPENSE BREAKDOWN:
 ${budgetSummary}
 
-HEAVY EQUIPMENT FLEET (${(CIH_DATASET.equipmentAssets || []).length}):
+HEAVY EQUIPMENT FLEET (${(CIH_DATASET.equipment || []).length}):
 ${equipment}
 
-TEAM DIRECTORY (${(CIH_DATASET.teamMembers || []).length}):
+TEAM DIRECTORY (${(CIH_DATASET.team || []).length}):
 ${team}
 
-PROJECT AUDIT REPORTS (${(CIH_DATASET.projectReports || []).length}):
+PROJECT AUDIT REPORTS (${(CIH_DATASET.reports || []).length}):
 ${reports}`;
     },
 
@@ -238,8 +246,8 @@ IMPORTANT RULES:
 
     budgetAnalysis: (projectName, totalBudget, spent, categoryList) => {
         return `Project: ${projectName || "Active Infrastructure Portfolio"}
-Total Allocated Budget: ${totalBudget || "₹94,830 Cr"}
-Current Spend: ${spent || "₹47,215 Cr"}
+Total Allocated Budget: ${totalBudget || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.totalPortfolioBudget) || "Not specified")}
+Current Spend: ${spent || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.totalSpent) || "Not specified")}
 Breakdown Categories: ${JSON.stringify(categoryList || [])}
 
 Tasks:

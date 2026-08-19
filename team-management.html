@@ -64,10 +64,6 @@
                 <div class="dash-filter-controls">
                     <select class="dash-btn-filter" id="projectFilter" onchange="filterTeamByProject()" style="padding: 9px 14px; font-weight: 600;">
                         <option value="all">📁 All Projects (Overall Team)</option>
-                        <option value="Delhi Metro - Phase 4">🚆 Delhi Metro - Phase 4</option>
-                        <option value="Mumbai Trans Harbour">📄 Mumbai Trans Harbour</option>
-                        <option value="Indore Smart City Hub">🏢 Indore Smart City Hub</option>
-                        <option value="International Terminal Exp.">✈️ International Terminal Exp.</option>
                     </select>
                     <button class="kpi-btn-primary" onclick="openModal('addTeamModal')">
                         <span>+</span> Add Team Member
@@ -84,7 +80,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">Total Personnel</div>
-                        <div class="kpi-value">38</div>
+                        <div class="kpi-value" id="kpiTeamTotal">—</div>
                     </div>
                 </div>
 
@@ -95,7 +91,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">Site Engineers</div>
-                        <div class="kpi-value">24</div>
+                        <div class="kpi-value" id="kpiTeamEngineers">—</div>
                     </div>
                 </div>
 
@@ -106,7 +102,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">Directors & Leads</div>
-                        <div class="kpi-value">8</div>
+                        <div class="kpi-value" id="kpiTeamLeads">—</div>
                     </div>
                 </div>
 
@@ -117,7 +113,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">Safety & Inspection</div>
-                        <div class="kpi-value">6</div>
+                        <div class="kpi-value" id="kpiTeamSafety">—</div>
                     </div>
                 </div>
             </div>
@@ -165,10 +161,6 @@
                 <div class="form-group">
                     <label class="form-label">Assigned Project</label>
                     <select class="form-input" id="newMemberProj">
-                        <option value="Delhi Metro - Phase 4">Delhi Metro - Phase 4</option>
-                        <option value="Mumbai Trans Harbour">Mumbai Trans Harbour</option>
-                        <option value="Indore Smart City Hub">Indore Smart City Hub</option>
-                        <option value="International Terminal Exp.">International Terminal Exp.</option>
                     </select>
                 </div>
 
@@ -222,13 +214,13 @@
 
     <!-- AI MODULE SCRIPTS -->
     <script src="ai/config.js?v=4.0"></script>
-    <script src="ai/ollama_client.js?v=4.0"></script>
-    <script src="ai/prompt_manager.js?v=4.0"></script>
+    <script src="ai/ollama_client.js?v=30.0"></script>
+    <script src="ai/prompt_manager.js?v=30.0"></script>
     <script src="ai/utils.js?v=4.0"></script>
-    <script src="ai/ai_service.js?v=4.0"></script>
+    <script src="ai/ai_service.js?v=30.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=4.0"></script>
-    <script src="js/main.js?v=4.0"></script>
+    <script src="js/data.js?v=30.0"></script>
+    <script src="js/main.js?v=30.0"></script>
 </body>
 </html>

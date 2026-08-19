@@ -368,9 +368,9 @@ Reducing construction expenditure without compromising structural integrity requ
    - **Cost Performance Index (CPI)**: Value of work completed divided by actual cost incurred. (CPI > 1.0 indicates under-budget performance).
    - **Schedule Variance (SV)**: Difference between earned progress value and baseline schedule target.
 3. **Current Portfolio Metrics**:
-   - Total Portfolio Budget: **₹94,830 Cr**
-   - Total Cumulative Spent: **₹47,215 Cr** (51% utilization)
-   - Portfolio Overrun Variance: **+1.2%** (Low Risk Threshold)`;
+   - Total Portfolio Budget: **${(dataset && dataset.budgetOverview && dataset.budgetOverview.totalPortfolioBudget) || 'Not specified'}**
+   - Total Cumulative Spent: **${(dataset && dataset.budgetOverview && dataset.budgetOverview.totalSpent) || 'Not specified'}** (${(dataset && dataset.budgetOverview && dataset.budgetOverview.utilizationPercent) || 0}% utilization)
+   - Portfolio Overrun Variance: **${(dataset && dataset.budgetOverview && dataset.budgetOverview.variancePercent) || '0%'}**`;
         }
 
         if (!dataset) {
@@ -378,30 +378,31 @@ Reducing construction expenditure without compromising structural integrity requ
         }
 
         const projects = dataset.projects || [];
-        const materials = dataset.materialInventory || [];
+        const materials = dataset.materials || [];
         const budget = dataset.budgetOverview || {};
-        const equipment = dataset.equipmentAssets || [];
-        const team = dataset.teamMembers || [];
-        const risks = dataset.riskIncidents || [];
+        const equipment = dataset.equipment || [];
+        const team = dataset.team || [];
+        const risks = dataset.risks || [];
+        const titleOf = (id) => (typeof cihProjectTitle === 'function' ? cihProjectTitle(id) : id);
+        const money = (n) => (typeof cihFormatMoney === 'function' ? cihFormatMoney(n) : n);
 
         // 4. PROJECT SPECIFIC QUESTION: Why is my project delayed?
-        if (lower.includes("delay") || lower.includes("why delayed") || lower.includes("behind schedule")) {
-            const delayedProjects = projects.filter(p => p.status.toLowerCase().includes("delay") || p.statusClass === "delayed" || (p.riskLevel || '').toLowerCase() === 'high');
-            const relevantRisks = risks.filter(r => r.risk_level.toLowerCase() === 'high' || r.predicted_delay_days > 0);
+        if (lower.includes("delay") || lower.includes("why delayed") || lower.includes("behind schedule") || lower.includes("on hold")) {
+            const delayedProjects = projects.filter(p => /hold|delay/i.test(p.status || '') || String(p.riskLevel || '').toLowerCase() === 'high');
+            const openRisks = risks.filter(r => String(r.status).toLowerCase() === 'open');
 
             if (delayedProjects.length > 0) {
                 return `### ⚠️ Delay Analysis & Root Cause Breakdown
 
-Based on active site telemetry, **${delayedProjects.length} project(s)** are currently experiencing schedule delays:
+Based on the live CIH dataset, **${delayedProjects.length} project(s)** are On Hold, delayed, or high-risk:
 
 ${delayedProjects.map(p => {
-    const projRisk = relevantRisks.find(r => r.project_name.toLowerCase().includes(p.title.toLowerCase()) || p.title.toLowerCase().includes(r.project_name.toLowerCase()));
+    const projRisk = openRisks.find(r => r.projectId === p.id);
     return `#### 🔴 ${p.title} (${p.city})
-- **Current Progress**: **${p.progressPercent}%** (Target Deadline: **${p.deadline}**)
-- **Allocated Budget**: **${p.formattedBudget}**
-- **Primary Root Cause**: ${projRisk ? `*${projRisk.risk_category}* — ${projRisk.description}` : 'Rebar stock levels fell below minimum safety threshold (350 tons vs 500 tons reorder level), causing foundation casting slowdown.'}
-- **Impact Assessment**: Predicted ${projRisk ? projRisk.predicted_delay_days : 12} days timeline variance and ₹${projRisk ? projRisk.impact_cost_crores : 14.5} Cr cost impact.
-- **Recommended Action**: ${projRisk ? projRisk.mitigation_status : 'Expedite Tata Steel rebar convoy dispatch and reallocate site shift schedules.'}`;
+- **Current Progress**: **${p.progressPercent}%** (Target Deadline: **${p.formattedDeadline || p.deadline}**)
+- **Allocated Budget**: **${p.formattedBudget || money(p.budget)}**
+- **Primary Root Cause**: ${projRisk ? `*${projRisk.category}* — ${projRisk.riskTitle}. ${projRisk.mitigationPlan}` : 'No open risk record is linked to this project in the register.'}
+- **Severity**: ${projRisk ? projRisk.severityScore : 'n/a'} | **Owner**: ${projRisk ? projRisk.assignedTo : 'Unassigned'}`;
 }).join('\n\n')}`;
             } else {
                 return `### ✅ Project Schedule Status
@@ -412,36 +413,39 @@ All active projects are currently progressing within acceptable schedule paramet
         // 5. SEARCH FOR MATCHED PROJECT
         const matchedProject = projects.find(p => lower.includes(p.title.toLowerCase()) || lower.includes(p.city.toLowerCase()) || lower.includes(p.id.toLowerCase()));
         if (matchedProject) {
-            const projTeam = team.filter(t => t.assignedProject.toLowerCase().includes(matchedProject.title.toLowerCase()));
-            const projEq = equipment.filter(e => e.assigned_project_id.toLowerCase().includes(matchedProject.title.toLowerCase()));
-            const projMat = materials.filter(m => m.assignedProject.toLowerCase().includes(matchedProject.title.toLowerCase()));
-            const projRisk = risks.filter(r => r.project_name.toLowerCase().includes(matchedProject.title.toLowerCase()));
+            const projTeam = team.filter(t => (t.assignedProjects || []).includes(matchedProject.id));
+            const projEq = equipment.filter(e => e.projectId === matchedProject.id);
+            const projMat = materials.filter(m => m.projectId === matchedProject.id);
+            const projRisk = risks.filter(r => r.projectId === matchedProject.id);
+            const lead = matchedProject.projectLead || (projTeam[0] && projTeam[0].name) || 'Unassigned';
 
             return `### 🏢 Project Analysis: ${matchedProject.title}
 - **Location**: 📍 ${matchedProject.city}
+- **Client**: ${matchedProject.client || '—'}
 - **Current Status**: \`${matchedProject.status}\` (${matchedProject.progressPercent}% Complete)
-- **Allocated Budget**: **${matchedProject.formattedBudget}**
-- **Target Deadline**: **${matchedProject.deadline}**
-- **Project Lead**: 👤 ${matchedProject.projectLead || 'Alex Sterling'}
+- **Allocated Budget**: **${matchedProject.formattedBudget || money(matchedProject.budget)}**
+- **Spent**: **${matchedProject.formattedSpent || money(matchedProject.spent)}** (${matchedProject.spentPercent || 0}%)
+- **Target Deadline**: **${matchedProject.formattedDeadline || matchedProject.deadline}**
+- **Project Lead**: 👤 ${lead}
 - **Risk Level**: **${matchedProject.riskLevel || 'Low'}**
 
 #### 👥 Assigned Site Personnel (${projTeam.length}):
-${projTeam.length ? projTeam.map(t => `- **${t.name}** (${t.role})`).join('\n') : '- Lead: Alex Sterling'}
+${projTeam.length ? projTeam.map(t => `- **${t.name}** (${t.role})`).join('\n') : '- No team members assigned'}
 
 #### 🚜 Machinery & Telemetry (${projEq.length}):
-${projEq.length ? projEq.map(e => `- **${e.asset_name}** (\`${e.unit_code}\`) — Engine Health: ${e.engine_health_pct}% (${e.status})`).join('\n') : '- Live Telemetry Active'}
+${projEq.length ? projEq.map(e => `- **${e.assetName}** (\`${e.unitCode}\`) — Engine Health: ${e.engineHealthPct}% (${e.status})`).join('\n') : '- No equipment linked'}
 
 #### 📦 Material Inventory (${projMat.length}):
-${projMat.length ? projMat.map(m => `- **${m.name}**: ${m.stockQuantity} (${m.status})`).join('\n') : '- Active RFID Stream'}
+${projMat.length ? projMat.map(m => `- **${m.itemName}**: ${m.quantityInStock} ${m.unit} on site / ${m.quantityRequired} ${m.unit} required`).join('\n') : '- No materials linked'}
 
-${projRisk.length ? `#### ⚠️ Risk Logs:\n${projRisk.map(r => `- **${r.risk_category}**: ${r.description} (Mitigation: ${r.mitigation_status})`).join('\n')}` : ''}`;
+${projRisk.length ? `#### ⚠️ Risk Logs:\n${projRisk.map(r => `- **${r.riskTitle}** (${r.category}): severity ${r.severityScore}, status ${r.status}. Mitigation: ${r.mitigationPlan}`).join('\n')}` : ''}`;
         }
 
         // 6. DEFAULT CONVERSATIONAL RESPONSE
         return `### 🤖 CIH Assistant (Llama 3.2)
 I understand you are asking about: **"${prompt}"**.
 
-I have complete awareness of your **10 active infrastructure projects** (*Delhi Metro Phase 4*, *Mumbai Trans Harbour*, *Indore Smart City*, *Terminal Expansion*, *Bullet Rail*, *Chenab Bridge*, *Navi Mumbai Airport*, *Hyderabad Supergrid*, *Kolkata Tunnel*, *Chennai Expressway*), as well as general civil engineering and financial concepts.
+I have live awareness of **${projects.length} active project(s)** in this workspace: ${projects.map(p => p.title).join(', ') || 'none loaded'}.
 
 How can I assist you further with project analysis, material recommendations, or budget optimization?`;
     }

@@ -59,10 +59,29 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <label class="form-label" style="margin: 0; font-weight: 700; white-space: nowrap;">Select Project Site:</label>
-                    <select class="form-input" id="riskProjectFilter" style="background: #FFFFFF; font-weight: 600; min-width: 260px;">
-                        <!-- Dynamically populated by populateAllProjectSelects() -->
+                    <select class="form-input" id="riskProjectFilter" style="background: #FFFFFF; font-weight: 600; min-width: 260px;" onchange="renderRiskRegister()">
                     </select>
                 </div>
+            </div>
+
+            <div class="analytics-container" style="margin-bottom: 24px;">
+                <div class="analytics-header" style="margin-bottom: 12px;">
+                    <h2 class="analytics-title">Live Risk Register</h2>
+                    <div class="analytics-sub">Severity = probability × impact, linked by projectId</div>
+                </div>
+                <table class="cih-data-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Risk</th>
+                            <th>Project</th>
+                            <th>Severity</th>
+                            <th>Status</th>
+                            <th>Owner</th>
+                        </tr>
+                    </thead>
+                    <tbody id="riskRegisterBody"></tbody>
+                </table>
             </div>
 
             <!-- PROMINENT ACTION BUTTON ROW (MATCHING REFERENCE SCREENSHOT) -->
@@ -118,13 +137,13 @@
 
     <!-- AI MODULE SCRIPTS -->
     <script src="ai/config.js?v=16.0"></script>
-    <script src="ai/ollama_client.js?v=16.0"></script>
-    <script src="ai/prompt_manager.js?v=16.0"></script>
+    <script src="ai/ollama_client.js?v=30.0"></script>
+    <script src="ai/prompt_manager.js?v=30.0"></script>
     <script src="ai/utils.js?v=16.0"></script>
-    <script src="ai/ai_service.js?v=16.0"></script>
+    <script src="ai/ai_service.js?v=30.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=16.0"></script>
-    <script src="js/main.js?v=16.0"></script>
+    <script src="js/data.js?v=30.0"></script>
+    <script src="js/main.js?v=30.0"></script>
 </body>
 </html>

@@ -224,10 +224,10 @@ ABSOLUTE RULES — NEVER VIOLATE:
         const freq = reportFrequency || 'Weekly Report';
 
         const progressSummary = `${snap.progressPercent}% completion achieved against milestone targets for target completion date ${snap.deadline}. Current status is marked as '${snap.status}'.`;
-        const budgetSummary = `Allocated portfolio budget: ${snap.budget}. Current capital spend stands at ${snap.spentPercent}% with an estimated variance of +1.8%.`;
-        const riskSummary = `Overall project risk is evaluated as '${snap.suggestedRiskLevel || 'MEDIUM'}'. Active site environmental hazard: ${snap.weatherHazard}.`;
-        const materialSummary = `Total inventory parcels tracked: ${snap.materialsCount || 3} items. ${(snap.lowStockMaterialsCount || 0) > 0 ? `⚠️ Low stock alert for ${snap.lowStockMaterialsCount} item(s) requiring re-order.` : 'All material inventory stock levels remain optimal.'}`;
-        const teamSummary = `Site operations led by ${snap.projectLead || 'Alex Sterling'} with ${snap.teamCount || 1} assigned specialist(s) actively conducting on-site engineering supervision.`;
+        const budgetSummary = `Allocated portfolio budget: ${snap.formattedBudget || snap.budget}. Current capital spend stands at ${snap.spentPercent}% (${snap.spent || 'n/a'}).`;
+        const riskSummary = `Overall project risk is evaluated as '${snap.suggestedRiskLevel || snap.riskLevel || 'MEDIUM'}'. Active site environmental hazard: ${snap.weatherHazard}. Open risks: ${(snap.risksList || []).length}.`;
+        const materialSummary = `Total inventory parcels tracked: ${snap.materialsCount || 0} items. ${(snap.lowStockMaterialsCount || 0) > 0 ? `Low stock alert for ${snap.lowStockMaterialsCount} item(s) requiring re-order.` : 'All material inventory stock levels remain within requirement thresholds.'}`;
+        const teamSummary = `Site operations led by ${snap.projectLead || 'Unassigned'} with ${snap.teamCount || 0} assigned specialist(s).`;
         const recommendations = [
             `Maintain regular supply re-order cycles to prevent stock bottlenecks at ${snap.title}.`,
             `Conduct milestone risk audits with lead engineers to ensure schedule compliance before ${snap.deadline}.`,

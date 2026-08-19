@@ -18,6 +18,41 @@ document.addEventListener('DOMContentLoaded', () => {
     initAIInsightsPage();
 });
 
+function getProjectBySelection(value) {
+    if (typeof cihFindProject === 'function') return cihFindProject(value);
+    return (CIH_DATASET.projects || []).find(p => p.id === value || p.title === value) || null;
+}
+
+function getDefaultProjectId() {
+    return (CIH_DATASET.projects && CIH_DATASET.projects[0] && CIH_DATASET.projects[0].id) || '';
+}
+
+function money(amount) {
+    return typeof cihFormatMoney === 'function' ? cihFormatMoney(amount) : `₹${Number(amount || 0).toLocaleString('en-IN')}`;
+}
+
+function formatDateLabel(iso) {
+    return typeof cihFormatDate === 'function' ? cihFormatDate(iso) : (iso || '—');
+}
+
+function projectTitleById(projectId) {
+    return typeof cihProjectTitle === 'function' ? cihProjectTitle(projectId) : projectId;
+}
+
+function defaultLeadName() {
+    return typeof cihDefaultLeadName === 'function' ? cihDefaultLeadName() : 'Unassigned';
+}
+
+function memberProjectIds(member) {
+    if (Array.isArray(member.assignedProjects) && member.assignedProjects.length) return member.assignedProjects;
+    if (member.projectId) return [member.projectId];
+    return [];
+}
+
+function memberProjectLabels(member) {
+    return memberProjectIds(member).map(projectTitleById).join(', ') || 'Unassigned';
+}
+
 // Dynamically Populate All Project Selection Dropdowns across the application
 function populateAllProjectSelects() {
     if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.projects) return;
@@ -35,17 +70,21 @@ function populateAllProjectSelects() {
         if (!selectEl) return;
 
         const currentValue = selectEl.value;
-        const hasAllOption = Array.from(selectEl.options).some(opt => opt.value === 'all');
+        const keepAll = selectEl.dataset.keepAll === 'true'
+            || Array.from(selectEl.options).some(opt => opt.value === 'all');
 
-        let html = hasAllOption ? '<option value="all">📁 All Projects</option>' : '';
+        let html = keepAll ? '<option value="all">📁 All Projects</option>' : '';
         html += CIH_DATASET.projects.map(p => `
-            <option value="${p.title}">${p.icon || '🏗️'} ${p.title}</option>
+            <option value="${p.id}">${p.icon || '🏗️'} ${p.title}</option>
         `).join('');
 
         selectEl.innerHTML = html;
 
-        if (currentValue && Array.from(selectEl.options).some(opt => opt.value === currentValue)) {
-            selectEl.value = currentValue;
+        const resolved = getProjectBySelection(currentValue);
+        if (resolved && Array.from(selectEl.options).some(opt => opt.value === resolved.id)) {
+            selectEl.value = resolved.id;
+        } else if (!keepAll && CIH_DATASET.projects[0]) {
+            selectEl.value = CIH_DATASET.projects[0].id;
         }
     });
 }
@@ -217,23 +256,23 @@ function renderProjectGrid(projectsList) {
             <div>
                 <div class="project-card-header">
                     <div style="display: flex; gap: 14px; align-items: center;">
-                        <div class="project-icon-box">${project.icon}</div>
+                        <div class="project-icon-box">${project.icon || (typeof cihProjectIcon === 'function' ? cihProjectIcon(project) : '🏗️')}</div>
                         <div>
                             <div class="project-title">${project.title}</div>
                             <div class="project-location">📍 ${project.city}</div>
                         </div>
                     </div>
-                    <span class="status-pill ${project.statusClass}">${project.status}</span>
+                    <span class="status-pill ${project.statusClass || (typeof cihStatusClass === 'function' ? cihStatusClass(project.status) : 'on-track')}">${project.status}</span>
                 </div>
 
                 <div class="project-metrics-row">
                     <div>
                         <div class="project-metric-label">BUDGET</div>
-                        <div class="project-metric-val">${project.formattedBudget}</div>
+                        <div class="project-metric-val">${project.formattedBudget || money(project.budget)}</div>
                     </div>
                     <div>
                         <div class="project-metric-label">DEADLINE</div>
-                        <div class="project-metric-val">${project.deadline}</div>
+                        <div class="project-metric-val">${project.formattedDeadline || formatDateLabel(project.deadline)}</div>
                     </div>
                 </div>
 
@@ -289,15 +328,15 @@ function handleOpenProject(projectId) {
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px;">
                 <div class="detail-metric-card">
                     <div class="detail-metric-label">TOTAL BUDGET</div>
-                    <div class="detail-metric-val" style="color: #1D4ED8;">${project.formattedBudget}</div>
+                    <div class="detail-metric-val" style="color: #1D4ED8;">${project.formattedBudget || money(project.budget)}</div>
                 </div>
                 <div class="detail-metric-card">
                     <div class="detail-metric-label">TARGET DEADLINE</div>
-                    <div class="detail-metric-val">${project.deadline}</div>
+                    <div class="detail-metric-val">${project.formattedDeadline || formatDateLabel(project.deadline)}</div>
                 </div>
                 <div class="detail-metric-card">
                     <div class="detail-metric-label">PROJECT LEAD</div>
-                    <div class="detail-metric-val" style="font-size: 16px;">${project.projectLead || 'Alex Sterling'}</div>
+                    <div class="detail-metric-val" style="font-size: 16px;">${project.projectLead || defaultLeadName()}</div>
                 </div>
             </div>
 
@@ -322,7 +361,7 @@ function handleOpenProject(projectId) {
                     📡 Active Site Materials & RFID Telemetry
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${(CIH_DATASET.rfidFeed || []).map(mat => `
+                    ${(CIH_DATASET.rfidFeed || []).filter(mat => !mat.location || mat.location === project.title).map(mat => `
                         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px;">
                             <div>
                                 <strong>${mat.id}</strong> &mdash; ${mat.description}
@@ -385,40 +424,44 @@ function handleCreateNewProject() {
         else icon = '🏗️';
     }
 
-    const statusVal = statusInput ? statusInput.value : 'on-track';
-    let statusClass = 'on-track';
-    let statusLabel = 'On Track';
-    if (statusVal === 'in-review') {
-        statusClass = 'in-review';
-        statusLabel = 'In Review';
-    } else if (statusVal === 'delayed') {
-        statusClass = 'delayed';
-        statusLabel = 'Delayed';
-    }
+    const statusVal = statusInput ? statusInput.value : 'In Progress';
+    const statusMap = {
+        'on-track': 'In Progress',
+        'in-review': 'Planning',
+        'delayed': 'On Hold',
+        'In Progress': 'In Progress',
+        'Planning': 'Planning',
+        'Completed': 'Completed',
+        'On Hold': 'On Hold'
+    };
+    const statusLabel = statusMap[statusVal] || statusVal || 'In Progress';
 
-    let formattedDeadline = 'Dec 31, 2026';
-    if (deadlineInput && deadlineInput.value) {
-        const d = new Date(deadlineInput.value);
-        if (!isNaN(d.getTime())) {
-            formattedDeadline = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        }
-    }
-
-    const budgetVal = parseFloat(budgetInput ? budgetInput.value : 1000) || 1000;
+    const budgetCrores = parseFloat(budgetInput ? budgetInput.value : 100) || 100;
     const progressVal = parseInt(progressInput ? progressInput.value : 10, 10) || 10;
+    const deadlineIso = (deadlineInput && deadlineInput.value) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const buildingTypeMap = {
+        transit: 'Infrastructure / Transit',
+        highway: 'Infrastructure / Highway',
+        commercial: 'Commercial / Civic',
+        airport: 'Airport / Aviation',
+        infrastructure: 'Infrastructure'
+    };
 
     const newProject = {
         id: `proj-${Date.now()}`,
         title: nameInput.value.trim(),
         city: (cityInput && cityInput.value.trim()) || 'India',
-        icon: icon,
+        client: (CIH_DATASET.settings && CIH_DATASET.settings.companyName) || 'CIH Client',
         status: statusLabel,
-        statusClass: statusClass,
-        budgetCrores: budgetVal,
-        formattedBudget: `₹${budgetVal.toLocaleString()} Cr`,
-        deadline: formattedDeadline,
         progressPercent: Math.min(100, Math.max(0, progressVal)),
-        projectLead: (leadInput && leadInput.value.trim()) || 'Alex Sterling',
+        budget: Math.round(budgetCrores * 1e7),
+        spent: 0,
+        startDate: new Date().toISOString().slice(0, 10),
+        deadline: deadlineIso,
+        riskLevel: statusLabel === 'On Hold' ? 'High' : 'Medium',
+        buildingType: buildingTypeMap[categoryInput ? categoryInput.value : 'infrastructure'] || 'Infrastructure',
+        icon: icon,
+        projectLead: (leadInput && leadInput.value.trim()) || defaultLeadName(),
         description: (descInput && descInput.value.trim()) || ''
     };
 
@@ -429,6 +472,7 @@ function handleCreateNewProject() {
         if (typeof initDashboardPage === 'function') {
             initDashboardPage();
         }
+        populateAllProjectSelects();
         closeModal('newProjectModal');
 
         // Reset form inputs
@@ -449,6 +493,8 @@ function handleDeleteProject(projectId) {
     if (confirm('Are you sure you want to delete this infrastructure project?')) {
         CIH_API.deleteProject(projectId).then(() => {
             renderProjectGrid(CIH_DATASET.projects);
+            populateAllProjectSelects();
+            if (typeof initDashboardPage === 'function') initDashboardPage();
         });
     }
 }
@@ -497,9 +543,23 @@ function recalculateCost() {
 // --- TEAM MANAGEMENT MODULE CONTROLLER ---
 function initTeamManagementPage() {
     const teamGrid = document.getElementById('teamGrid');
-    if (teamGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.teamMembers) {
-        renderTeamGrid(CIH_DATASET.teamMembers);
+    if (teamGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.team) {
+        renderTeamKpis();
+        renderTeamGrid(CIH_DATASET.team);
     }
+}
+
+function renderTeamKpis() {
+    const kpis = CIH_DATASET.moduleKpis && CIH_DATASET.moduleKpis.team;
+    if (!kpis) return;
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    setText('kpiTeamTotal', kpis.total);
+    setText('kpiTeamEngineers', kpis.engineers);
+    setText('kpiTeamLeads', kpis.leads);
+    setText('kpiTeamSafety', kpis.safety);
 }
 
 function renderTeamGrid(membersList) {
@@ -519,8 +579,8 @@ function renderTeamGrid(membersList) {
         <div class="team-card" id="member-${member.id}">
             <div>
                 <div class="team-card-header">
-                    <div class="team-avatar-big" style="background: ${member.avatarBg || '#1D4ED8'};">
-                        ${member.avatarInitials || 'TM'}
+                    <div class="team-avatar-big" style="background: ${member.avatarBg || (typeof cihAvatarColor === 'function' ? cihAvatarColor(member.name) : '#1D4ED8')};">
+                        ${member.avatarInitials || (typeof cihInitials === 'function' ? cihInitials(member.name) : 'TM')}
                     </div>
                     <div>
                         <div class="team-name">${member.name}</div>
@@ -529,9 +589,9 @@ function renderTeamGrid(membersList) {
                 </div>
 
                 <div class="team-details-list">
-                    <div>📍 <strong>Project:</strong> ${member.assignedProject}</div>
+                    <div>📍 <strong>Project:</strong> ${memberProjectLabels(member)}</div>
                     <div>✉️ <strong>Email:</strong> ${member.email}</div>
-                    <div>📞 <strong>Phone:</strong> ${member.phone}</div>
+                    <div>📞 <strong>Phone:</strong> ${member.phone || '—'}</div>
                 </div>
 
                 <div class="skills-wrapper">
@@ -554,16 +614,16 @@ function renderTeamGrid(membersList) {
 function filterTeamMembers() {
     const searchInput = document.getElementById('teamSearch');
     const projectSelect = document.getElementById('projectFilter');
-    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.teamMembers) return;
+    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.team) return;
 
-    let filtered = CIH_DATASET.teamMembers;
+    let filtered = CIH_DATASET.team;
 
-    // Filter by project dropdown
+    // Filter by project dropdown (value is projectId)
     if (projectSelect && projectSelect.value !== 'all') {
-        filtered = filtered.filter(m => m.assignedProject === projectSelect.value);
+        filtered = filtered.filter(m => memberProjectIds(m).includes(projectSelect.value));
         updateProjectManagerSummary(projectSelect.value, filtered);
     } else {
-        updateProjectManagerSummary('all', CIH_DATASET.teamMembers);
+        updateProjectManagerSummary('all', CIH_DATASET.team);
     }
 
     // Filter by search query
@@ -571,8 +631,8 @@ function filterTeamMembers() {
         const query = searchInput.value.toLowerCase().trim();
         filtered = filtered.filter(m =>
             m.name.toLowerCase().includes(query) ||
-            m.role.toLowerCase().includes(query) ||
-            m.assignedProject.toLowerCase().includes(query)
+            (m.role || '').toLowerCase().includes(query) ||
+            memberProjectLabels(m).toLowerCase().includes(query)
         );
     }
 
@@ -595,16 +655,15 @@ function updateProjectManagerSummary(selectedProject, teamList) {
 
     summaryCard.style.display = 'grid';
 
-    // Find Project Lead / Director for this project
-    const projectObj = (CIH_DATASET.projects || []).find(p => p.title === selectedProject);
-    const leadMember = teamList.find(m => m.role.toLowerCase().includes('director') || m.role.toLowerCase().includes('lead') || m.accessLevel === 'Admin') || teamList[0];
-
-    const leadName = projectObj ? (projectObj.projectLead || (leadMember ? leadMember.name : 'Alex Sterling')) : (leadMember ? leadMember.name : 'Alex Sterling');
+    const projectObj = getProjectBySelection(selectedProject);
+    const leadMember = teamList.find(m => /director|lead/i.test(m.role || '') || m.accessLevel === 'Admin') || teamList[0];
+    const leadName = (projectObj && projectObj.projectLead) || (leadMember && leadMember.name) || defaultLeadName();
+    const displayTitle = projectObj ? projectObj.title : selectedProject;
     const totalWorkers = teamList.length;
 
     summaryCard.innerHTML = `
         <div>
-            <div class="proj-summary-title">📍 ${selectedProject}</div>
+            <div class="proj-summary-title">📍 ${displayTitle}</div>
             <div class="proj-summary-sub">Active Site Team & Leadership Breakdown</div>
         </div>
         <div class="proj-summary-metric">
@@ -645,16 +704,16 @@ function handleCreateTeamMember() {
         ? skillInput.value.split(',').map(s => s.trim())
         : ['Site Telemetry', 'AI Logistics'];
 
+    const assignedId = (projInput && projInput.value) || getDefaultProjectId();
     const newMember = {
-        id: `tm-${Date.now()}`,
+        id: `user-${Date.now()}`,
         name: name,
         role: (roleInput && roleInput.value.trim()) || 'Site Engineer',
         category: 'Engineering',
         email: (emailInput && emailInput.value.trim()) || `${name.toLowerCase().replace(/\s+/g, '.')}@cih-hub.com`,
         phone: (phoneInput && phoneInput.value.trim()) || '+91 98000 00000',
-        assignedProject: (projInput && projInput.value) || 'Delhi Metro - Phase 4',
+        assignedProjects: assignedId ? [assignedId] : [],
         status: 'Active',
-        statusClass: 'status-active',
         avatarInitials: initials,
         avatarBg: randomBg,
         skills: skillsArray,
@@ -692,30 +751,51 @@ function handleDeleteTeamMember(memberId) {
 // ==========================================================================
 function initBudgetPage() {
     const budgetGrid = document.getElementById('expenseTableBody');
-    if (budgetGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview) {
-        renderBudgetGrid(CIH_DATASET.budgetOverview.expensesList);
+    if (budgetGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.expenses) {
+        renderBudgetKpis();
+        renderBudgetGrid(CIH_DATASET.expenses);
     }
+}
+
+function renderBudgetKpis() {
+    const overview = CIH_DATASET.budgetOverview;
+    if (!overview) return;
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    setText('kpiBudgetTotal', overview.totalPortfolioBudget);
+    setText('kpiBudgetSpent', overview.totalSpent);
+    setText('kpiBudgetReserve', overview.remainingBudget);
+    setText('kpiBudgetOverrun', `${overview.overrunRisk || 'Low'} Risk`);
+    const utilBadge = document.getElementById('kpiBudgetUtilBadge');
+    if (utilBadge) utilBadge.textContent = `${overview.utilizationPercent || 0}% Utilized`;
+    const overrunBadge = document.getElementById('kpiBudgetOverrunBadge');
+    if (overrunBadge) overrunBadge.textContent = `${overview.variancePercent || '0%'} vs Progress`;
 }
 
 function renderBudgetGrid(expenses) {
     const tbody = document.getElementById('expenseTableBody');
     if (!tbody) return;
 
-    if (expenses.length === 0) {
+    if (!expenses || expenses.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 30px; color: #64748B;">No expenses recorded.</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = expenses.map(exp => `
+    tbody.innerHTML = expenses.map(exp => {
+        const status = exp.paymentStatus || exp.status || 'Pending';
+        const pillClass = /paid/i.test(status) ? 'on-track' : (/overdue/i.test(status) ? 'delayed' : 'in-review');
+        return `
         <tr>
             <td><strong>${exp.id}</strong></td>
-            <td><strong>${exp.title}</strong></td>
-            <td>📍 ${exp.project}</td>
+            <td><strong>${exp.title || exp.vendor || exp.category}</strong></td>
+            <td>📍 ${projectTitleById(exp.projectId) || exp.project || '—'}</td>
             <td><span class="skill-badge">${exp.category}</span></td>
-            <td><strong style="color: #1D4ED8;">${exp.amount}</strong></td>
-            <td><span class="status-pill on-track" style="font-size: 11px;">${exp.status}</span></td>
-        </tr>
-    `).join('');
+            <td><strong style="color: #1D4ED8;">${typeof exp.amount === 'number' ? money(exp.amount) : exp.amount}</strong></td>
+            <td><span class="status-pill ${pillClass}" style="font-size: 11px;">${status}</span></td>
+        </tr>`;
+    }).join('');
 }
 
 function handleCreateExpense() {
@@ -729,18 +809,21 @@ function handleCreateExpense() {
         return;
     }
 
+    const amountCrores = parseFloat(amountInput ? amountInput.value : 0) || 0;
     const newExp = {
-        id: `EXP-${Math.floor(100 + Math.random() * 900)}`,
+        id: `exp-${Date.now()}`,
         title: titleInput.value.trim(),
-        project: (projInput && projInput.value) || 'Delhi Metro - Phase 4',
-        amount: `₹${parseFloat(amountInput ? amountInput.value : 50).toLocaleString()} Cr`,
+        projectId: (projInput && projInput.value) || getDefaultProjectId(),
+        amount: Math.round(amountCrores * 1e7),
         category: (catInput && catInput.value) || 'Materials',
-        status: 'Approved',
-        date: 'Jul 24, 2026'
+        paymentStatus: 'Pending',
+        vendor: titleInput.value.trim(),
+        date: new Date().toISOString().slice(0, 10)
     };
 
     CIH_API.addExpense(newExp).then(() => {
-        renderBudgetGrid(CIH_DATASET.budgetOverview.expensesList);
+        renderBudgetKpis();
+        renderBudgetGrid(CIH_DATASET.expenses);
         closeModal('addExpenseModal');
         titleInput.value = '';
         if (amountInput) amountInput.value = '';
@@ -750,11 +833,11 @@ function handleCreateExpense() {
 
 function filterBudgetByProject() {
     const projSelect = document.getElementById('budgetProjectFilter');
-    if (!projSelect || typeof CIH_DATASET === 'undefined' || !CIH_DATASET.budgetOverview) return;
+    if (!projSelect || typeof CIH_DATASET === 'undefined' || !CIH_DATASET.expenses) return;
 
-    let filtered = CIH_DATASET.budgetOverview.expensesList;
+    let filtered = CIH_DATASET.expenses;
     if (projSelect.value !== 'all') {
-        filtered = filtered.filter(e => e.project === projSelect.value);
+        filtered = filtered.filter(e => e.projectId === projSelect.value);
     }
     renderBudgetGrid(filtered);
 }
@@ -764,79 +847,98 @@ function filterBudgetByProject() {
 // ==========================================================================
 function initMaterialsPage() {
     const matGrid = document.getElementById('materialsGrid');
-    if (matGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.materialInventory) {
-        renderMaterialsGrid(CIH_DATASET.materialInventory);
+    if (matGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.materials) {
+        renderMaterialKpis();
+        renderMaterialsGrid(CIH_DATASET.materials);
     }
+}
+
+function renderMaterialKpis() {
+    const kpis = CIH_DATASET.moduleKpis && CIH_DATASET.moduleKpis.materials;
+    if (!kpis) return;
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    setText('kpiMatParcels', kpis.parcels);
+    setText('kpiMatLowStock', `${kpis.lowStock} Items`);
+    setText('kpiMatWaste', `${kpis.wasteReduction}%`);
 }
 
 function renderMaterialsGrid(matList) {
     const matGrid = document.getElementById('materialsGrid');
     if (!matGrid) return;
 
-    if (matList.length === 0) {
+    if (!matList || matList.length === 0) {
         matGrid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #64748B;">No matching materials found.</div>`;
         return;
     }
 
-    matGrid.innerHTML = matList.map(mat => `
+    matGrid.innerHTML = matList.map(mat => {
+        const name = mat.itemName || mat.name;
+        const st = typeof cihMaterialStatus === 'function' ? cihMaterialStatus(mat) : { status: mat.status || 'In Stock', statusClass: mat.statusClass || 'on-track' };
+        const util = typeof cihMaterialUtilization === 'function' ? cihMaterialUtilization(mat) : (mat.utilizationPercent || 0);
+        const stockLabel = mat.quantityInStock != null ? `${Number(mat.quantityInStock).toLocaleString('en-IN')} ${mat.unit || ''}` : (mat.stockQuantity || '—');
+        const reorder = mat.quantityRequired != null ? `${Math.round((Number(mat.quantityRequired) || 0) * 0.25).toLocaleString('en-IN')} ${mat.unit || ''}` : (mat.reorderLevel || '—');
+        return `
         <div class="project-card">
             <div>
                 <div class="project-card-header">
                     <div>
-                        <div class="project-title">${mat.name}</div>
-                        <div class="project-location">📡 ${mat.rfidTag} &bull; Supplier: ${mat.supplier}</div>
+                        <div class="project-title">${name}</div>
+                        <div class="project-location">🏷️ ${mat.category || 'Material'} &bull; Supplier: ${mat.supplier || '—'}</div>
                     </div>
-                    <span class="status-pill ${mat.statusClass}">${mat.status}</span>
+                    <span class="status-pill ${st.statusClass}">${st.status}</span>
                 </div>
 
                 <div class="project-metrics-row" style="margin-bottom: 12px;">
                     <div>
                         <div class="project-metric-label">STOCK ON SITE</div>
-                        <div class="project-metric-val" style="color: #1D4ED8;">${mat.stockQuantity}</div>
+                        <div class="project-metric-val" style="color: #1D4ED8;">${stockLabel}</div>
                     </div>
                     <div>
                         <div class="project-metric-label">RE-ORDER LEVEL</div>
-                        <div class="project-metric-val">${mat.reorderLevel}</div>
+                        <div class="project-metric-val">${reorder}</div>
                     </div>
                 </div>
 
                 <div class="project-progress-wrapper" style="margin-bottom: 0;">
                     <div class="project-progress-label-row">
-                        <span>Utilization Capacity</span>
-                        <span style="font-weight: 700; color: #059669;">${mat.utilizationPercent}%</span>
+                        <span>Stock vs Requirement</span>
+                        <span style="font-weight: 700; color: #059669;">${util}%</span>
                     </div>
                     <div class="project-progress-bar-bg">
-                        <div class="project-progress-fill" style="width: ${mat.utilizationPercent}%; background: ${mat.utilizationPercent < 30 ? '#EF4444' : '#10B981'};"></div>
+                        <div class="project-progress-fill" style="width: ${util}%; background: ${util < 30 ? '#EF4444' : '#10B981'};"></div>
                     </div>
                 </div>
             </div>
 
             <div class="project-card-footer" style="justify-content: space-between; margin-top: 16px;">
-                <span style="font-size: 12px; color: #64748B;">📍 ${mat.assignedProject}</span>
-                <button class="btn-open-project" style="padding: 6px 14px; font-size: 12px;" onclick="alert('Order re-stock triggered for ${mat.name}')">Re-Order Stock</button>
+                <span style="font-size: 12px; color: #64748B;">📍 ${projectTitleById(mat.projectId)}</span>
+                <button class="btn-open-project" style="padding: 6px 14px; font-size: 12px;" onclick="alert('Order re-stock triggered for ${name}')">Re-Order Stock</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function filterMaterials() {
     const searchInput = document.getElementById('materialSearch');
     const projSelect = document.getElementById('materialProjectFilter');
-    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.materialInventory) return;
+    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.materials) return;
 
-    let filtered = CIH_DATASET.materialInventory;
+    let filtered = CIH_DATASET.materials;
 
     if (projSelect && projSelect.value !== 'all') {
-        filtered = filtered.filter(m => m.assignedProject === projSelect.value);
+        filtered = filtered.filter(m => m.projectId === projSelect.value);
     }
 
     if (searchInput && searchInput.value.trim()) {
         const query = searchInput.value.toLowerCase().trim();
         filtered = filtered.filter(m =>
-            m.name.toLowerCase().includes(query) ||
-            m.rfidTag.toLowerCase().includes(query) ||
-            m.assignedProject.toLowerCase().includes(query) ||
-            m.category.toLowerCase().includes(query)
+            String(m.itemName || m.name || '').toLowerCase().includes(query) ||
+            String(m.supplier || '').toLowerCase().includes(query) ||
+            String(m.category || '').toLowerCase().includes(query) ||
+            projectTitleById(m.projectId).toLowerCase().includes(query)
         );
     }
 
@@ -859,27 +961,27 @@ function handleCreateMaterial() {
         return;
     }
 
+    const qty = parseFloat(String(qtyInput && qtyInput.value || '0').replace(/,/g, '')) || 0;
     const newMat = {
-        id: `MAT-INV-${Math.floor(10 + Math.random() * 90)}`,
-        name: nameInput.value.trim(),
-        category: (catInput && catInput.value) || 'Steel & Rebar',
-        rfidTag: `RFID-TAG-${Math.floor(100 + Math.random() * 900)}`,
-        stockQuantity: (qtyInput && qtyInput.value) ? `${qtyInput.value} Units` : '2,500 Units',
-        status: 'In Stock',
-        statusClass: 'on-track',
-        reorderLevel: '500 Units',
-        assignedProject: (projInput && projInput.value) || 'Delhi Metro - Phase 4',
-        supplier: (supplierInput && supplierInput.value.trim()) || 'National Infrastructure Suppliers',
-        utilizationPercent: 80
+        id: `mat-${Date.now()}`,
+        projectId: (projInput && projInput.value) || getDefaultProjectId(),
+        itemName: nameInput.value.trim(),
+        category: (catInput && catInput.value) || 'Steel & Structure',
+        unit: 'Units',
+        quantityRequired: Math.max(qty, Math.round(qty * 1.25)) || 100,
+        quantityInStock: qty || 0,
+        unitPrice: 0,
+        supplier: (supplierInput && supplierInput.value.trim()) || 'National Infrastructure Suppliers'
     };
 
     CIH_API.addMaterial(newMat).then(() => {
+        renderMaterialKpis();
         filterMaterials();
         closeModal('addMaterialModal');
         nameInput.value = '';
         if (qtyInput) qtyInput.value = '';
         if (supplierInput) supplierInput.value = '';
-        alert(`Material stock "${newMat.name}" added to inventory!`);
+        alert(`Material stock "${newMat.itemName}" added to inventory!`);
     });
 }
 
@@ -888,8 +990,8 @@ function handleCreateMaterial() {
 // ==========================================================================
 function initEquipmentPage() {
     const eqGrid = document.getElementById('equipmentGrid');
-    if (eqGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.equipmentAssets) {
-        renderEquipmentGrid(CIH_DATASET.equipmentAssets);
+    if (eqGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.equipment) {
+        renderEquipmentGrid(CIH_DATASET.equipment);
     }
 }
 
@@ -897,68 +999,72 @@ function renderEquipmentGrid(eqList) {
     const eqGrid = document.getElementById('equipmentGrid');
     if (!eqGrid) return;
 
-    if (eqList.length === 0) {
+    if (!eqList || eqList.length === 0) {
         eqGrid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #64748B;">No matching equipment assets found.</div>`;
         return;
     }
 
-    eqGrid.innerHTML = eqList.map(eq => `
+    eqGrid.innerHTML = eqList.map(eq => {
+        const name = eq.assetName || eq.asset_name;
+        const code = eq.unitCode || eq.unit_code;
+        const health = eq.engineHealthPct != null ? eq.engineHealthPct : eq.engine_health_pct;
+        const hours = eq.operatingHours != null ? eq.operatingHours : eq.operating_hours;
+        const fuel = eq.fuelRateLph != null ? `${eq.fuelRateLph} L/hr` : eq.fuel_rate_lph;
+        const maint = eq.maintenanceDueHrs != null ? eq.maintenanceDueHrs : eq.maintenance_due_hrs;
+        const pill = /service/i.test(eq.status || '') || health < 80 ? 'in-review' : 'on-track';
+        return `
         <div class="project-card">
             <div>
                 <div class="project-card-header">
                     <div>
-                        <div class="project-title">🚜 ${eq.asset_name}</div>
-                        <div class="project-location">🏷️ ${eq.unit_code} &bull; Operator: ${eq.operator || 'Site Specialist'}</div>
+                        <div class="project-title">🚜 ${name}</div>
+                        <div class="project-location">🏷️ ${code} &bull; Operator: ${eq.operator || 'Site Specialist'}</div>
                     </div>
-                    <span class="status-pill ${eq.statusClass || 'on-track'}">${eq.status || 'Optimal'}</span>
+                    <span class="status-pill ${pill}">${eq.status || 'Optimal'}</span>
                 </div>
-
                 <div class="project-metrics-row" style="margin-bottom: 14px;">
                     <div>
                         <div class="project-metric-label">ENGINE HEALTH</div>
-                        <div class="project-metric-val" style="color: ${eq.engine_health_pct > 80 ? '#10B981' : '#F59E0B'};">${eq.engine_health_pct}%</div>
+                        <div class="project-metric-val" style="color: ${health > 80 ? '#10B981' : '#F59E0B'};">${health}%</div>
                     </div>
                     <div>
                         <div class="project-metric-label">OPERATING HOURS</div>
-                        <div class="project-metric-val">${eq.operating_hours} hrs</div>
+                        <div class="project-metric-val">${hours} hrs</div>
                     </div>
                 </div>
-
                 <div class="health-meter-bg">
-                    <div class="health-meter-fill" style="width: ${eq.engine_health_pct}%; background: ${eq.engine_health_pct > 80 ? '#10B981' : '#F59E0B'};"></div>
+                    <div class="health-meter-fill" style="width: ${health}%; background: ${health > 80 ? '#10B981' : '#F59E0B'};"></div>
                 </div>
-
                 <div style="font-size: 12px; color: #64748B; margin-top: 14px; display: flex; justify-content: space-between;">
-                    <span>Fuel Rate: <strong>${eq.fuel_rate_lph}</strong></span>
-                    <span>Maint. Due: <strong>In ${eq.maintenance_due_hrs} hrs</strong></span>
+                    <span>Fuel Rate: <strong>${fuel}</strong></span>
+                    <span>Maint. Due: <strong>In ${maint} hrs</strong></span>
                 </div>
             </div>
-
             <div class="project-card-footer" style="justify-content: space-between; margin-top: 16px;">
-                <span style="font-size: 12px; color: #64748B;">📍 ${eq.assigned_project_id}</span>
-                <button class="btn-open-project" style="padding: 6px 14px; font-size: 12px;" onclick="alert('Running IoT diagnostics on ${eq.unit_code}...')">Run Telemetry</button>
+                <span style="font-size: 12px; color: #64748B;">📍 ${projectTitleById(eq.projectId)}</span>
+                <button class="btn-open-project" style="padding: 6px 14px; font-size: 12px;" onclick="alert('Running IoT diagnostics on ${code}...')">Run Telemetry</button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function filterEquipmentByProject() {
     const projSelect = document.getElementById('equipmentProjectFilter');
     const searchInput = document.getElementById('equipmentSearch');
-    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.equipmentAssets) return;
+    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.equipment) return;
 
-    let filtered = CIH_DATASET.equipmentAssets;
+    let filtered = CIH_DATASET.equipment;
 
     if (projSelect && projSelect.value !== 'all') {
-        filtered = filtered.filter(eq => eq.assigned_project_id === projSelect.value);
+        filtered = filtered.filter(eq => eq.projectId === projSelect.value);
     }
 
     if (searchInput && searchInput.value.trim()) {
         const query = searchInput.value.toLowerCase().trim();
         filtered = filtered.filter(eq =>
-            eq.asset_name.toLowerCase().includes(query) ||
-            eq.unit_code.toLowerCase().includes(query) ||
-            eq.assigned_project_id.toLowerCase().includes(query)
+            String(eq.assetName || eq.asset_name || '').toLowerCase().includes(query) ||
+            String(eq.unitCode || eq.unit_code || '').toLowerCase().includes(query) ||
+            projectTitleById(eq.projectId).toLowerCase().includes(query)
         );
     }
 
@@ -977,17 +1083,16 @@ function handleCreateEquipment() {
     }
 
     const newEq = {
-        equipment_id: `EQ-${Math.floor(100 + Math.random() * 900)}`,
-        asset_name: nameInput.value.trim(),
-        unit_code: (codeInput && codeInput.value.trim()) || `AST-UNIT-${Math.floor(10 + Math.random() * 90)}`,
-        assigned_project_id: (projInput && projInput.value) || 'Delhi Metro - Phase 4',
-        engine_health_pct: 98,
-        operating_hours: 120,
-        fuel_rate_lph: '15.0 L/hr',
-        maintenance_due_hrs: 400,
+        id: `eq-${Date.now()}`,
+        assetName: nameInput.value.trim(),
+        unitCode: (codeInput && codeInput.value.trim()) || `AST-UNIT-${Math.floor(10 + Math.random() * 90)}`,
+        projectId: (projInput && projInput.value) || getDefaultProjectId(),
+        engineHealthPct: 98,
+        operatingHours: 120,
+        fuelRateLph: 15.0,
+        maintenanceDueHrs: 400,
         status: 'Optimal',
-        statusClass: 'on-track',
-        operator: (operatorInput && operatorInput.value.trim()) || 'Alex Sterling'
+        operator: (operatorInput && operatorInput.value.trim()) || defaultLeadName()
     };
 
     CIH_API.addEquipment(newEq).then(() => {
@@ -996,7 +1101,7 @@ function handleCreateEquipment() {
         nameInput.value = '';
         if (codeInput) codeInput.value = '';
         if (operatorInput) operatorInput.value = '';
-        alert(`Equipment "${newEq.asset_name}" added to fleet telemetry!`);
+        alert(`Equipment "${newEq.assetName}" added to fleet telemetry!`);
     });
 }
 
@@ -1011,7 +1116,9 @@ async function triggerAIReportGeneration() {
     const outputBox = document.getElementById('aiReportOutputBox');
     if (!outputBox) return;
 
-    const projName = projSelect ? projSelect.value : 'Delhi Metro - Phase 4';
+    const projId = projSelect ? projSelect.value : getDefaultProjectId();
+    const proj = getProjectBySelection(projId);
+    const projName = (proj && proj.title) || projId;
     const freq = freqSelect ? freqSelect.value : 'Weekly Report';
 
     outputBox.style.display = 'block';
@@ -1023,7 +1130,7 @@ async function triggerAIReportGeneration() {
         </div>
     `;
 
-    const res = await CIH_AI_SERVICE.generateExecutiveReport(projName, freq);
+    const res = await CIH_AI_SERVICE.generateExecutiveReport(projId, freq);
     currentGeneratedAIReportData = res;
     const snap = res.snapshot;
     const s = res.sections;
@@ -1134,99 +1241,144 @@ End of Executive Performance Report - Construction Intelligent Hub 2026
 }
 
 function initReportsPage() {
-    const repGrid = document.getElementById('reportsTableBody');
-    if (repGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.projectReports) {
-        renderReportsGrid(CIH_DATASET.projectReports);
+    if (typeof CIH_DATASET === 'undefined') return;
+    renderReportKpis();
+    renderReportsMilestones();
+    if (document.getElementById('reportsTableBody') && CIH_DATASET.reports) {
+        renderReportsGrid(CIH_DATASET.reports);
     }
+}
+
+function renderReportsMilestones() {
+    const chart = document.getElementById('reportsMilestoneChart');
+    if (!chart || !CIH_DATASET.projects) return;
+    const colors = ['#10B981', '#0284C7', '#D97706', '#4F46E5', '#7C3AED'];
+    chart.innerHTML = CIH_DATASET.projects.map((p, i) => {
+        const color = /hold|delay/i.test(p.status) ? '#D97706' : colors[i % colors.length];
+        return `
+            <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px;">
+                    <span>${p.icon || '🏗️'} ${p.title}</span>
+                    <strong style="color: ${color};">${p.progressPercent}% ${p.status}</strong>
+                </div>
+                <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
+                    <div style="width: ${p.progressPercent}%; height: 100%; background: ${color};"></div>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function renderReportKpis() {
+    const kpis = CIH_DATASET.moduleKpis && CIH_DATASET.moduleKpis.reports;
+    if (!kpis) return;
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    setText('kpiRepTotal', kpis.total);
+    setText('kpiRepVerified', kpis.verified ? 'Optimal' : 'Review');
+    setText('kpiRepFlags', `${kpis.discrepancies} Active`);
+    setText('kpiRepExports', `${kpis.total} Audits`);
 }
 
 function renderReportsGrid(repList) {
     const tbody = document.getElementById('reportsTableBody');
     if (!tbody) return;
 
-    if (repList.length === 0) {
+    if (!repList || repList.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 30px; color: #64748B;">No matching project reports found.</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = repList.map(rep => `
+    tbody.innerHTML = repList.map(rep => {
+        const id = rep.id || rep.report_id;
+        const title = rep.reportTitle || rep.report_title;
+        const type = rep.reportType || rep.report_type;
+        const size = rep.fileSizeMb != null ? `${rep.fileSizeMb} MB` : (rep.file_size_mb || '');
+        return `
         <tr>
-            <td><strong>${rep.report_id}</strong></td>
-            <td><strong>${rep.report_title}</strong></td>
-            <td>📍 ${rep.assigned_project_id}</td>
-            <td><span class="skill-badge">${rep.report_type}</span></td>
-            <td><span class="format-badge format-${rep.format.toLowerCase()}">${rep.format}</span> <span style="font-size: 11px; color: #64748B;">(${rep.file_size_mb})</span></td>
+            <td><strong>${id}</strong></td>
+            <td><strong>${title}</strong></td>
+            <td>📍 ${projectTitleById(rep.projectId)}</td>
+            <td><span class="skill-badge">${type}</span></td>
+            <td><span class="format-badge format-${String(rep.format || 'pdf').toLowerCase()}">${rep.format}</span> <span style="font-size: 11px; color: #64748B;">(${size})</span></td>
             <td>
-                <button class="btn-open-project" style="padding: 5px 12px; font-size: 11px;" onclick="downloadReportFile('${rep.report_id}')">📥 Export Report</button>
+                <button class="btn-open-project" style="padding: 5px 12px; font-size: 11px;" onclick="downloadReportFile('${id}')">📥 Export Report</button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 function downloadReportFile(reportId) {
-    const rep = (CIH_DATASET.projectReports || []).find(r => r.report_id === reportId) || {
-        report_id: reportId,
-        report_title: "Construction Audit Report",
-        assigned_project_id: "Active Job Site",
-        report_type: "Site Audit",
-        generated_by: "Alex Sterling",
-        generated_date: "Jul 24, 2026",
-        format: "TXT"
+    const snap = typeof CIH_DATASET.getProjectSnapshot === 'function' ? CIH_DATASET.getProjectSnapshot(getDefaultProjectId()) : {};
+    const rep = (CIH_DATASET.reports || []).find(r => r.id === reportId || r.report_id === reportId) || {
+        id: reportId,
+        reportTitle: 'Construction Audit Report',
+        projectId: getDefaultProjectId(),
+        reportType: 'Site Audit',
+        generatedBy: defaultLeadName(),
+        generatedDate: new Date().toISOString().slice(0, 10),
+        format: 'TXT'
     };
+    const title = rep.reportTitle || rep.report_title;
+    const type = rep.reportType || rep.report_type;
+    const author = rep.generatedBy || rep.generated_by || defaultLeadName();
+    const date = formatDateLabel(rep.generatedDate || rep.generated_date);
+    const projTitle = projectTitleById(rep.projectId);
 
     const docContent = `====================================================================
 CONSTRUCTION INTELLIGENT HUB (CIH) - AUDIT REPORT EXPORT
 ====================================================================
-Report ID: ${rep.report_id}
-Title: ${rep.report_title}
-Project Site: ${rep.assigned_project_id}
-Type: ${rep.report_type}
-Generated By: ${rep.generated_by || 'Alex Sterling'}
-Date: ${rep.generated_date || 'Jul 24, 2026'}
+Report ID: ${rep.id || reportId}
+Title: ${title}
+Project Site: ${projTitle}
+Type: ${type}
+Generated By: ${author}
+Date: ${date}
 Format: ${rep.format}
+Company: ${(CIH_DATASET.settings && CIH_DATASET.settings.companyName) || 'CIH'}
 ====================================================================
 
 EXECUTIVE AUDIT SUMMARY:
-This document represents an officially verified audit export from the Construction Intelligent Hub (CIH) platform.
+Portfolio snapshot pulled from live CIH_DATASET.
 
-1. SITE TELEMETRY & COMPLIANCE
-   - Safety Compliance Score: 98.4% (Optimal)
-   - RFID Parcel Telemetry: 100% Active Sync
-   - Heavy Machinery IoT Telemetry: 94% Health Index
+1. SITE STATUS
+   - Project: ${snap.title || projTitle}
+   - Progress: ${snap.progressPercent || 0}%
+   - Budget: ${snap.formattedBudget || '—'} | Spent: ${snap.spentPercent || 0}%
 
-2. FINANCIAL & CAPITAL LOGS
-   - Cost Overrun Risk: Low (+1.8% Variance)
-   - Spending Velocity: Within approved budget thresholds
+2. FINANCIAL LOGS
+   - Overrun risk: ${(CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.overrunRisk) || 'Low'}
+   - Variance: ${(CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.variancePercent) || '0%'}
 
-3. AI NEURAL PREDICTIONS (Llama 3.2 Engine)
-   - Recommended Action: Proceed with scheduled foundation pour for Zone 4.
-   - Procurement Optimization: Bulk rebar negotiation scheduled.
+3. OPEN RISKS
+   - Open register items: ${(CIH_DATASET.moduleKpis && CIH_DATASET.moduleKpis.risks && CIH_DATASET.moduleKpis.risks.open) || 0}
 
 ====================================================================
-End of Official Report Export - CIH Platform 2026
+End of Official Report Export
 ====================================================================`;
 
-    const fileName = `${rep.report_id}_${rep.report_title.replace(/\s+/g, '_')}.${rep.format.toLowerCase() === 'pdf' ? 'txt' : rep.format.toLowerCase()}`;
+    const fileName = `${rep.id || reportId}_${String(title).replace(/\s+/g, '_')}.${String(rep.format || 'txt').toLowerCase() === 'pdf' ? 'txt' : String(rep.format || 'txt').toLowerCase()}`;
     AIUtils.downloadAsFile(fileName, docContent);
 }
 
 function filterReportsByProject() {
     const projSelect = document.getElementById('reportProjectFilter');
     const searchInput = document.getElementById('reportSearch');
-    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.projectReports) return;
+    if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.reports) return;
 
-    let filtered = CIH_DATASET.projectReports;
+    let filtered = CIH_DATASET.reports;
 
     if (projSelect && projSelect.value !== 'all') {
-        filtered = filtered.filter(r => r.assigned_project_id === projSelect.value);
+        filtered = filtered.filter(r => r.projectId === projSelect.value);
     }
 
     if (searchInput && searchInput.value.trim()) {
         const query = searchInput.value.toLowerCase().trim();
         filtered = filtered.filter(r =>
-            r.report_title.toLowerCase().includes(query) ||
-            r.report_type.toLowerCase().includes(query) ||
-            r.assigned_project_id.toLowerCase().includes(query)
+            String(r.reportTitle || r.report_title || '').toLowerCase().includes(query) ||
+            String(r.reportType || r.report_type || '').toLowerCase().includes(query) ||
+            projectTitleById(r.projectId).toLowerCase().includes(query)
         );
     }
 
@@ -1247,24 +1399,23 @@ function handleCreateReport() {
     const fmt = (formatInput && formatInput.value) || 'PDF';
 
     const newRep = {
-        report_id: `REP-2026-${Math.floor(10 + Math.random() * 90)}`,
-        report_title: titleInput.value.trim(),
-        report_type: (typeInput && typeInput.value) || 'Site Performance',
-        assigned_project_id: (projInput && projInput.value) || 'Delhi Metro - Phase 4',
-        generated_by: 'Alex Sterling',
-        generated_date: 'Jul 24, 2026',
-        file_size_mb: '3.5 MB',
+        id: `rep-${Date.now()}`,
+        reportTitle: titleInput.value.trim(),
+        reportType: (typeInput && typeInput.value) || 'Site Performance',
+        projectId: (projInput && projInput.value) || getDefaultProjectId(),
+        generatedBy: defaultLeadName(),
+        generatedDate: new Date().toISOString().slice(0, 10),
+        fileSizeMb: 3.5,
         status: 'Generated',
         format: fmt
     };
 
     CIH_API.addReport(newRep).then(() => {
+        renderReportKpis();
         filterReportsByProject();
         closeModal('addReportModal');
         titleInput.value = '';
-
-        // Trigger immediate file download for user
-        downloadReportFile(newRep.report_id);
+        downloadReportFile(newRep.id);
     });
 }
 
@@ -2130,6 +2281,36 @@ function initRiskAnalysisPage() {
     const statusBadge = document.getElementById('riskStatusBadge');
     if (outputBox) outputBox.style.display = 'none';
     if (statusBadge) statusBadge.style.display = 'none';
+    renderRiskRegister();
+}
+
+function renderRiskRegister() {
+    const tbody = document.getElementById('riskRegisterBody');
+    if (!tbody || !CIH_DATASET.risks) return;
+
+    const projSelect = document.getElementById('riskProjectFilter');
+    let risks = CIH_DATASET.risks;
+    if (projSelect && projSelect.value && projSelect.value !== 'all') {
+        risks = risks.filter(r => r.projectId === projSelect.value);
+    }
+
+    if (!risks.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:#64748B;">No risks in the live register for this selection.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = risks.map(r => {
+        const pill = Number(r.severityScore) >= 16 ? 'delayed' : (Number(r.severityScore) >= 10 ? 'in-review' : 'on-track');
+        return `
+        <tr>
+            <td><strong>${r.id}</strong></td>
+            <td><strong>${r.riskTitle}</strong><div style="font-size:11px;color:#64748B;">${r.category}</div></td>
+            <td>📍 ${projectTitleById(r.projectId)}</td>
+            <td><span class="status-pill ${pill}" style="font-size:11px;">${r.severityScore} (${r.probability}×${r.impact})</span></td>
+            <td>${r.status}</td>
+            <td style="font-size:12px;color:#475569;">${r.assignedTo || '—'}</td>
+        </tr>`;
+    }).join('');
 }
 
 let currentRiskAnalysisData = null;
@@ -2140,7 +2321,9 @@ async function triggerRiskAIAnalysis() {
     const projSelect = document.getElementById('riskProjectFilter');
     if (!outputBox) return;
 
-    const projName = projSelect ? projSelect.value : 'Delhi Metro - Phase 4';
+    const projId = projSelect ? projSelect.value : getDefaultProjectId();
+    const proj = getProjectBySelection(projId);
+    const projName = (proj && proj.title) || projId;
 
     // Show status badge as Generating
     if (statusBadge) {
@@ -2163,8 +2346,8 @@ async function triggerRiskAIAnalysis() {
 
     // Fetch live project snapshot
     const snapshot = (typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
-        ? CIH_DATASET.getProjectSnapshot(projName)
-        : { title: projName, city: 'Site', status: 'Active', progressPercent: 50, formattedBudget: '₹1,000 Cr', deadline: 'Dec 2026' };
+        ? CIH_DATASET.getProjectSnapshot(projId)
+        : { title: projName, city: 'Site', status: 'Active', progressPercent: 50, formattedBudget: money(0), deadline: '—' };
 
     const res = await CIH_AI_SERVICE.evaluateRisk(projName, snapshot);
     currentRiskAnalysisData = res;
@@ -2808,11 +2991,13 @@ function downloadForecastReport() {
 // USER PROFILE & AVATAR MANAGEMENT CONTROLLERS
 // ==========================================================================
 function syncGlobalProfileUI() {
-    const storedName = localStorage.getItem('cih_user_name') || 'Alex Sterling';
-    const storedRole = localStorage.getItem('cih_user_role') || 'Project Director';
-    const storedEmail = localStorage.getItem('cih_user_email') || 'alex.sterling@cih-hub.com';
-    const storedPhone = localStorage.getItem('cih_user_phone') || '+91 98765 43210';
-    const storedLocation = localStorage.getItem('cih_user_location') || 'Delhi NCR Site Headquarters';
+    const lead = (typeof CIH_DATASET !== 'undefined' && CIH_DATASET.team && CIH_DATASET.team[0]) ? CIH_DATASET.team[0] : null;
+    const settings = (typeof CIH_DATASET !== 'undefined' && CIH_DATASET.settings) ? CIH_DATASET.settings : {};
+    const storedName = localStorage.getItem('cih_user_name') || (lead && lead.name) || 'Unassigned';
+    const storedRole = localStorage.getItem('cih_user_role') || (lead && lead.role) || 'Project Director';
+    const storedEmail = localStorage.getItem('cih_user_email') || (lead && lead.email) || '';
+    const storedPhone = localStorage.getItem('cih_user_phone') || (lead && lead.phone) || '';
+    const storedLocation = localStorage.getItem('cih_user_location') || settings.companyAddress || '';
     const storedAvatar = localStorage.getItem('cih_user_avatar');
 
     // Compute initials from stored name
@@ -2919,11 +3104,11 @@ function handleSaveProfileDetails() {
     const phoneInput = document.getElementById('profileInputPhone');
     const locInput = document.getElementById('profileInputLocation');
 
-    const name = nameInput ? nameInput.value.trim() : 'Alex Sterling';
+    const name = nameInput ? nameInput.value.trim() : defaultLeadName();
     const role = roleInput ? roleInput.value.trim() : 'Project Director';
-    const email = emailInput ? emailInput.value.trim() : 'alex.sterling@cih-hub.com';
-    const phone = phoneInput ? phoneInput.value.trim() : '+91 98765 43210';
-    const loc = locInput ? locInput.value.trim() : 'Delhi NCR Site Headquarters';
+    const email = emailInput ? emailInput.value.trim() : '';
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    const loc = locInput ? locInput.value.trim() : ((CIH_DATASET.settings && CIH_DATASET.settings.companyAddress) || '');
 
     localStorage.setItem('cih_user_name', name);
     localStorage.setItem('cih_user_role', role);

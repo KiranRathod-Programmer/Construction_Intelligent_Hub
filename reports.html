@@ -68,7 +68,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">TOTAL REPORTS GENERATED</div>
-                        <div class="kpi-value">128</div>
+                        <div class="kpi-value" id="kpiRepTotal">—</div>
                     </div>
                 </div>
 
@@ -79,7 +79,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">VERIFIED COMPLIANCE</div>
-                        <div class="kpi-value" style="color: #10B981;">Optimal</div>
+                        <div class="kpi-value" id="kpiRepVerified" style="color: #10B981;">—</div>
                     </div>
                 </div>
 
@@ -90,7 +90,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">DISCREPANCIES FLAGGED</div>
-                        <div class="kpi-value" style="color: #059669;">0 Active</div>
+                        <div class="kpi-value" id="kpiRepFlags" style="color: #059669;">—</div>
                     </div>
                 </div>
 
@@ -101,7 +101,7 @@
                     </div>
                     <div class="kpi-card-body">
                         <div class="kpi-label">DOWNLOAD ACTIVITY</div>
-                        <div class="kpi-value" style="color: #2563EB;">54 Audits</div>
+                        <div class="kpi-value" id="kpiRepExports" style="color: #2563EB;">—</div>
                     </div>
                 </div>
             </div>
@@ -119,46 +119,7 @@
                     <!-- CHART: MILESTONE PROGRESS COMPARISON -->
                     <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 18px;">
                         <h3 style="font-size: 14px; font-weight: 700; color: #1E293B; margin: 0 0 14px 0;">🏗️ Project Milestone Completion Progress</h3>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <div>
-                                <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px;">
-                                    <span>🚆 Delhi Metro - Phase 4</span>
-                                    <strong style="color: #10B981;">68% Complete</strong>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
-                                    <div style="width: 68%; height: 100%; background: #10B981;"></div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px;">
-                                    <span>📄 Mumbai Trans Harbour</span>
-                                    <strong style="color: #0284C7;">92% Complete</strong>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
-                                    <div style="width: 92%; height: 100%; background: #0284C7;"></div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px;">
-                                    <span>🏢 Indore Smart City Hub</span>
-                                    <strong style="color: #D97706;">35% (Delayed)</strong>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
-                                    <div style="width: 35%; height: 100%; background: #D97706;"></div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px;">
-                                    <span>✈️ International Terminal Exp.</span>
-                                    <strong style="color: #4F46E5;">52% Complete</strong>
-                                </div>
-                                <div style="width: 100%; height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden;">
-                                    <div style="width: 52%; height: 100%; background: #4F46E5;"></div>
-                                </div>
-                            </div>
+                        <div id="reportsMilestoneChart" style="display: flex; flex-direction: column; gap: 12px;">
                         </div>
                     </div>
                 </div>
@@ -178,10 +139,6 @@
                     <div>
                         <label class="form-label" style="font-weight: 700;">1. Select Project Site *</label>
                         <select class="form-input" id="aiReportProjectSelect" style="background: #FFFFFF;">
-                            <option value="Delhi Metro - Phase 4">🚆 Delhi Metro - Phase 4</option>
-                            <option value="Mumbai Trans Harbour">📄 Mumbai Trans Harbour</option>
-                            <option value="Indore Smart City Hub">🏢 Indore Smart City Hub</option>
-                            <option value="International Terminal Exp.">✈️ International Terminal Exp me.</option>
                         </select>
                     </div>
 
@@ -205,7 +162,32 @@
                 <!-- AI REPORT OUTPUT CONTAINER -->
                 <div id="aiReportOutputBox" style="display: none;">
                     <!-- Dynamically populated by main.js triggerAIReportGeneration() -->
+                </div>
             </div>
+
+            <div class="analytics-container" style="margin-bottom: 28px;">
+                <div class="analytics-header" style="margin-bottom: 16px;">
+                    <div>
+                        <h2 class="analytics-title">Archived Site Reports</h2>
+                        <div class="analytics-sub">Generated from the live dataset and linked by projectId</div>
+                    </div>
+                    <button class="kpi-btn-secondary" onclick="openModal('addReportModal')">+ New Report</button>
+                </div>
+                <table class="cih-data-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Project</th>
+                            <th>Type</th>
+                            <th>Format</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsTableBody"></tbody>
+                </table>
+            </div>
+
         </main>
 
         <!-- DASHBOARD FOOTER -->
@@ -246,10 +228,6 @@
                 <div class="form-group">
                     <label class="form-label">Target Project Site</label>
                     <select class="form-input" id="newRepProj">
-                        <option value="Delhi Metro - Phase 4">Delhi Metro - Phase 4</option>
-                        <option value="Mumbai Trans Harbour">Mumbai Trans Harbour</option>
-                        <option value="Indore Smart City Hub">Indore Smart City Hub</option>
-                        <option value="International Terminal Exp.">International Terminal Exp.</option>
                     </select>
                 </div>
 
@@ -297,13 +275,13 @@
 
     <!-- AI MODULE SCRIPTS -->
     <script src="ai/config.js?v=7.0"></script>
-    <script src="ai/ollama_client.js?v=7.0"></script>
-    <script src="ai/prompt_manager.js?v=7.0"></script>
+    <script src="ai/ollama_client.js?v=30.0"></script>
+    <script src="ai/prompt_manager.js?v=30.0"></script>
     <script src="ai/utils.js?v=7.0"></script>
-    <script src="ai/ai_service.js?v=7.0"></script>
+    <script src="ai/ai_service.js?v=30.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=7.0"></script>
-    <script src="js/main.js?v=7.0"></script>
+    <script src="js/data.js?v=30.0"></script>
+    <script src="js/main.js?v=30.0"></script>
 </body>
 </html>
