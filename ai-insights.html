@@ -207,7 +207,7 @@
                     <div class="analytics-header" style="margin-bottom: 16px;">
                         <div>
                             <h2 class="analytics-title">📈 Predictive AI Forecast Dashboard</h2>
-                            <div class="analytics-sub">Generate future completion dates, delay probabilities, future budget variance, and risk trends.</div>
+                            <div class="analytics-sub">Select a live project, then Generate Forecast. Local Ollama (llama3.2) writes a plain-language outlook from current site telemetry — downloadable as .TXT.</div>
                         </div>
                     </div>
 
@@ -221,7 +221,7 @@
                         </div>
 
                         <div>
-                            <button class="btn-primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px;" onclick="triggerProjectForecast()">
+                            <button class="btn-primary" id="btnGenerateForecast" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px;" onclick="triggerProjectForecast()">
                                 🤖 Generate Forecast
                             </button>
                         </div>
@@ -269,14 +269,14 @@
     </div>
 
     <!-- AI MODULE SCRIPTS -->
-    <script src="ai/config.js?v=19.0"></script>
-    <script src="ai/ollama_client.js?v=19.0"></script>
-    <script src="ai/prompt_manager.js?v=19.0"></script>
-    <script src="ai/utils.js?v=19.0"></script>
-    <script src="ai/ai_service.js?v=19.0"></script>
+    <script src="ai/config.js?v=20.0"></script>
+    <script src="ai/ollama_client.js?v=20.0"></script>
+    <script src="ai/prompt_manager.js?v=20.0"></script>
+    <script src="ai/utils.js?v=20.0"></script>
+    <script src="ai/ai_service.js?v=20.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=19.0"></script>
-    <script src="js/main.js?v=19.0"></script>
+    <script src="js/data.js?v=20.0"></script>
+    <script src="js/main.js?v=20.0"></script>
 </body>
 </html>

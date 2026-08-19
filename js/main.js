@@ -2414,148 +2414,150 @@ async function sendDocChatMessage() {
 async function triggerProjectForecast() {
     const select = document.getElementById('aiForecastProjectSelect');
     const outputBox = document.getElementById('aiForecastOutput');
+    const generateBtn = document.getElementById('btnGenerateForecast');
+    const modelSelect = document.getElementById('ai-model-select');
     if (!select || !outputBox) return;
 
-    const projName = select.value || 'Delhi Metro - Phase 4';
+    const projName = select.value;
+    if (!projName) {
+        alert('Please select a project before generating a forecast.');
+        return;
+    }
+    const activeModel = (modelSelect && modelSelect.value) ? modelSelect.value : "llama3.2";
+
+    currentForecastReportData = null;
+
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = '0.55';
+        generateBtn.innerHTML = '⏳ Generating with Ollama...';
+    }
 
     outputBox.style.display = 'block';
     outputBox.innerHTML = `
         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 24px; text-align: center;">
             <div style="font-size: 28px; margin-bottom: 8px;">📈</div>
             <div style="font-size: 14px; font-weight: 700; color: #1E293B;">Generating AI Predictive Forecast for ${projName}...</div>
-            <div style="font-size: 12px; color: #64748B; margin-top: 4px;">Evaluating completion dates, budget variance, material trends, and risk velocity...</div>
+            <div style="font-size: 12px; color: #64748B; margin-top: 4px;">Sending live project telemetry to local Ollama (${activeModel}). No simulated forecast is used.</div>
         </div>
     `;
 
-    const res = await CIH_AI_SERVICE.generateProjectForecast(projName);
-    currentForecastReportData = res;
+    try {
+        const res = await CIH_AI_SERVICE.generateProjectForecast(projName, activeModel);
+        currentForecastReportData = res;
 
-    const f = res.forecast;
-    const s = res.executiveSummary;
+        const snap = res.snapshot || {};
+        const pd = res.projectData || {};
+        const progress = (snap.progressPercent !== undefined && snap.progressPercent !== null) ? snap.progressPercent : (pd.progressPercent ?? 'N/A');
+        const deadline = snap.deadline || pd.deadline || 'Not specified';
+        const budget = pd.formattedBudget || snap.budget || snap.formattedBudget || 'Not specified';
+        const status = snap.status || pd.status || 'Not specified';
+        const city = snap.city || pd.city || 'Not specified';
+        const risk = pd.riskLevel || snap.suggestedRiskLevel || 'Not specified';
+        const reportHtml = res.html || AIUtils.formatMarkdownToHTML(res.rawText || '');
 
-    outputBox.innerHTML = `
-        <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #F1F5F9; padding-bottom: 14px; margin-bottom: 20px;">
-                <div>
-                    <span class="skill-badge" style="background: #EFF6FF; color: #1D4ED8; font-weight: 700;">NEURAL PREDICTIVE FORECAST</span>
-                    <h2 style="font-size: 20px; font-weight: 800; color: #0F172A; margin: 6px 0 2px 0;">📈 ${res.projectName} Forecast Dashboard</h2>
-                    <div style="font-size: 12px; color: #64748B;">Target Completion: <strong>${res.snapshot.deadline}</strong> &bull; Current Progress: <strong>${res.snapshot.progressPercent}%</strong></div>
+        outputBox.innerHTML = `
+            <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid #F1F5F9; padding-bottom: 14px; margin-bottom: 18px;">
+                    <div>
+                        <span class="skill-badge" style="background: #EFF6FF; color: #1D4ED8; font-weight: 700;">LIVE OLLAMA FORECAST (${(res.modelName || activeModel).toUpperCase()})</span>
+                        <h2 style="font-size: 20px; font-weight: 800; color: #0F172A; margin: 6px 0 2px 0;">📈 ${res.projectName} Forecast</h2>
+                        <div style="font-size: 12px; color: #64748B;">${city} &bull; Status: <strong>${status}</strong> &bull; Progress: <strong>${progress}%</strong> &bull; Target: <strong>${deadline}</strong></div>
+                    </div>
+                    <button class="btn-primary" id="btnDownloadForecast" style="padding: 9px 18px; font-size: 12.5px;" onclick="downloadForecastReport()">📥 Download Forecast (.TXT)</button>
                 </div>
-                <button class="btn-primary" style="padding: 9px 18px; font-size: 12.5px;" onclick="downloadForecastReport()">📥 Download Forecast (.TXT)</button>
-            </div>
 
-            <!-- FORECAST CARDS GRID -->
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
-                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-                    <div style="font-size: 11px; font-weight: 700; color: #64748B;">EXPECTED COMPLETION DATE</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #0F172A; margin: 6px 0;">🎯 ${f.expectedCompletion}</div>
-                    <div style="font-size: 12px; color: #475569;">Forecasted completion velocity based on historical daily output.</div>
-                </div>
-
-                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-                    <div style="font-size: 11px; font-weight: 700; color: #64748B;">DELAY PROBABILITY</div>
-                    <div style="font-size: 16px; font-weight: 800; color: ${f.delayProbValue > 50 ? '#EF4444' : '#10B981'}; margin: 6px 0;">⏱️ ${f.delayProb}</div>
-                    <div style="width: 100%; height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden; margin-top: 8px;">
-                        <div style="width: ${f.delayProbValue}%; height: 100%; background: ${f.delayProbValue > 50 ? '#EF4444' : '#10B981'};"></div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px;">
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748B;">LOCATION</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #0F172A; margin-top: 6px;">📍 ${city}</div>
+                    </div>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748B;">BUDGET</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #0F172A; margin-top: 6px;">💵 ${budget}</div>
+                    </div>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748B;">RISK LEVEL</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #0F172A; margin-top: 6px;">⚠️ ${risk}</div>
+                    </div>
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748B;">GENERATED</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #0F172A; margin-top: 6px;">🗓️ ${res.date || ''}</div>
                     </div>
                 </div>
 
-                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-                    <div style="font-size: 11px; font-weight: 700; color: #64748B;">FUTURE BUDGET STATUS</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #0F172A; margin: 6px 0;">💵 ${f.budgetStatus}</div>
-                    <div style="font-size: 12px; color: #475569;">Portfolio spend rate: ${res.snapshot.spentPercent}% allocated.</div>
-                </div>
-
-                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-                    <div style="font-size: 11px; font-weight: 700; color: #64748B;">MATERIAL CONSUMPTION TREND</div>
-                    <div style="font-size: 15px; font-weight: 800; color: #0284C7; margin: 6px 0;">📦 ${f.materialTrend}</div>
-                    <div style="font-size: 12px; color: #475569;">RFID gate telemetry tracking active.</div>
-                </div>
-
-                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-                    <div style="font-size: 11px; font-weight: 700; color: #64748B;">RISK TREND</div>
-                    <div style="font-size: 15px; font-weight: 800; color: #D97706; margin: 6px 0;">⚠️ ${f.riskTrend}</div>
-                    <div style="font-size: 12px; color: #475569;">Evaluated across 6 multi-site risk factors.</div>
-                </div>
-
-                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px;">
-                    <div style="font-size: 11px; font-weight: 700; color: #64748B;">OVERALL PROJECT HEALTH PREDICTION</div>
-                    <div style="font-size: 22px; font-weight: 900; color: ${f.healthScore >= 75 ? '#10B981' : '#EF4444'}; margin: 4px 0;">🏥 ${f.healthScore} <span style="font-size: 13px; color: #94A3B8;">/ 100</span></div>
-                    <div style="font-size: 12px; color: #475569;">Overall neural forecast score.</div>
+                <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px; font-size: 14px; color: #334155; line-height: 1.65;">
+                    ${reportHtml}
                 </div>
             </div>
-
-            <!-- EXECUTIVE SUMMARY -->
-            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 20px;">
-                <h3 style="font-size: 15px; font-weight: 800; color: #0F172A; margin: 0 0 14px 0;">🧠 AI Executive Forecast Summary</h3>
-                
-                <div style="margin-bottom: 14px;">
-                    <div style="font-weight: 700; font-size: 13px; color: #1E293B; margin-bottom: 4px;">1. What is Expected to Happen:</div>
-                    <div style="font-size: 13px; color: #475569; line-height: 1.5;">${s.whatWillHappen}</div>
-                </div>
-
-                <div style="margin-bottom: 14px;">
-                    <div style="font-weight: 700; font-size: 13px; color: #1E293B; margin-bottom: 4px;">2. Why the Prediction Was Made:</div>
-                    <div style="font-size: 13px; color: #475569; line-height: 1.5;">${s.whyPredicted}</div>
-                </div>
-
-                <div>
-                    <div style="font-weight: 700; font-size: 13px; color: #15803D; margin-bottom: 6px;">3. Recommended Actions to Improve Performance:</div>
-                    <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; color: #166534; line-height: 1.6;">
-                        ${s.recommendedActions.map(act => `<li>${act}</li>`).join('')}
-                    </ul>
-                </div>
+        `;
+    } catch (err) {
+        console.error("[AI Forecast] Generation failed:", err);
+        currentForecastReportData = null;
+        outputBox.innerHTML = `
+            <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 12px; padding: 22px;">
+                <div style="font-size: 15px; font-weight: 800; color: #B91C1C; margin-bottom: 8px;">⚠️ Forecast requires a live Ollama instance</div>
+                <div style="font-size: 13px; color: #7F1D1D; line-height: 1.6;">${err.message || 'Unknown error'}</div>
+                <div style="font-size: 12.5px; color: #991B1B; margin-top: 10px;">Start Ollama locally with llama3.2, then click Generate Forecast again. Simulated forecasts are disabled.</div>
             </div>
-        </div>
-    `;
+        `;
+    } finally {
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.style.opacity = '1';
+            generateBtn.innerHTML = '🤖 Generate Forecast';
+        }
+    }
+}
+
+function runAIPredictiveForecast() {
+    return triggerProjectForecast();
 }
 
 function downloadForecastReport() {
-    if (!currentForecastReportData) {
-        alert('Please generate an AI forecast first.');
+    const d = currentForecastReportData;
+    if (!d || !d.rawText || !String(d.rawText).trim()) {
+        alert('Please generate an AI forecast first. The download file is created from the live Ollama report.');
         return;
     }
 
-    const d = currentForecastReportData;
-    const f = d.forecast;
-    const s = d.executiveSummary;
+    const snap = d.snapshot || {};
+    const pd = d.projectData || {};
+    const projectName = d.projectName || pd.title || snap.title || 'Project';
+    const progress = (snap.progressPercent !== undefined && snap.progressPercent !== null) ? snap.progressPercent : (pd.progressPercent ?? 'N/A');
+    const deadline = snap.deadline || pd.deadline || 'Not specified';
+    const budget = pd.formattedBudget || snap.budget || snap.formattedBudget || 'Not specified';
+    const city = snap.city || pd.city || 'Not specified';
+    const status = snap.status || pd.status || 'Not specified';
+    const risk = pd.riskLevel || snap.suggestedRiskLevel || 'Not specified';
+    const generated = d.date || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const modelName = d.modelName || 'llama3.2';
 
-    const reportText = `================================================================================
-CONSTRUCTION INTELLIGENT HUB (CIH) - OFFICIAL AI PROJECT FORECAST
-================================================================================
-Project Site Name: ${d.projectName}
-Current Progress : ${d.snapshot.progressPercent}% Completed
-Target Deadline  : ${d.snapshot.deadline}
-Allocated Budget : ${d.snapshot.budget}
-Date Generated   : ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-================================================================================
+    const reportText = [
+        '================================================================================',
+        'CONSTRUCTION INTELLIGENT HUB (CIH) - AI PROJECT FORECAST',
+        '================================================================================',
+        `Project Site Name : ${projectName}`,
+        `Location          : ${city}`,
+        `Current Status    : ${status}`,
+        `Current Progress  : ${progress}%`,
+        `Target Deadline   : ${deadline}`,
+        `Allocated Budget  : ${budget}`,
+        `Risk Level        : ${risk}`,
+        `Model             : ${modelName}`,
+        `Date Generated    : ${generated}`,
+        '================================================================================',
+        '',
+        d.rawText.trim(),
+        '',
+        '================================================================================',
+        'End of AI Forecast Report - Construction Intelligent Hub 2026',
+        '================================================================================',
+        ''
+    ].join('\n');
 
-1. NEURAL PREDICTIVE FORECAST METRICS
---------------------------------------------------------------------------------
-- Expected Completion Date      : ${f.expectedCompletion}
-- Delay Probability             : ${f.delayProb}
-- Future Budget Status          : ${f.budgetStatus}
-- Material Consumption Trend    : ${f.materialTrend}
-- Risk Trend                    : ${f.riskTrend}
-- Overall Health Prediction     : ${f.healthScore} / 100
-
-2. EXECUTIVE FORECAST ANALYSIS
---------------------------------------------------------------------------------
-[WHAT IS EXPECTED TO HAPPEN]:
-${s.whatWillHappen}
-
-[WHY THE PREDICTION WAS MADE]:
-${s.whyPredicted}
-
-[RECOMMENDED ACTIONS]:
-${s.recommendedActions.map((act, idx) => `${idx + 1}. ${act}`).join('\n')}
-
-================================================================================
-End of AI Forecast Report - Construction Intelligent Hub 2026
-================================================================================`;
-
-    const fileName = `${d.projectName.replace(/\s+/g, '_')}_AI_Forecast_Report.txt`;
-    AIUtils.downloadAsFile(fileName, reportText);
+    const fileName = `${String(projectName).replace(/[^a-zA-Z0-9_-]+/g, '_')}_AI_Forecast_Report.txt`;
+    AIUtils.downloadAsFile(fileName, reportText, 'text/plain');
 }
 
 // ==========================================================================
