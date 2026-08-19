@@ -119,13 +119,18 @@ Tasks: Estimate material quantities (Cement, Concrete, Steel Rebar, Sand, Aggreg
         const extPaintLitNet= Math.round(totalSqFtRaw * 0.05);   // exterior walls
         const intPaintLitNet= Math.round(totalSqFtRaw * 0.12);   // interior 2 coats
 
+        const steelGrade = p.steelGrade || "Fe 500D TMT";
+        const lengthM = p.length;
+        const widthM = p.width;
+        const heightM = p.height;
+
         return `You are CIH Material AI — a Senior Chartered Quantity Surveyor (MRICS) and Civil Cost Engineer.
 
 PROJECT INPUT:
 - Project: ${projName} | Location: ${loc}
 - Sector: ${pType} | Structure: ${bType}
-- Base Area: ${areaSqFtRaw.toLocaleString()} sq ft | Floors: ${numFloors} | Total: ${totalSqFtRaw.toLocaleString()} sq ft (≈${totalSqM} m²)
-- Concrete Mix: ${mixRatio} | Soil: ${soil} | Foundation: ${foundation}
+${(lengthM && widthM) ? `- Footprint: ${lengthM} m × ${widthM} m | Floor height: ${heightM || 3} m\n` : ''}- Base Area: ${areaSqFtRaw.toLocaleString()} sq ft | Floors: ${numFloors} | Total: ${totalSqFtRaw.toLocaleString()} sq ft (≈${totalSqM} m²)
+- Concrete Mix: ${mixRatio} | Steel: ${steelGrade} | Soil: ${soil} | Foundation: ${foundation}
 - Wastage Allowance: ${wastage} | Units: ${unitSystem}
 
 CALCULATION REFERENCE (use these as your starting basis, refine with engineering judgment):

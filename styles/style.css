@@ -2,6 +2,7 @@
 
 /* --- ROOT VARIABLES & RESET --- */
 :root {
+    --primary: #2563EB;
     --primary-blue: #1D4ED8;
     --vibrant-blue: #2563EB;
     --light-blue-bg: #EFF6FF;
@@ -2413,5 +2414,212 @@ body::after {
     }
     .mat-wizard-submit-btn {
         justify-content: center;
+    }
+}
+
+/* --- 3-step wizard progress, tiles, step panels --- */
+.mat-wizard-progress {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 0 0 22px;
+    padding: 12px 8px 14px;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+}
+
+.mat-wizard-progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.mat-wizard-progress-num {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #E2E8F0;
+    color: #64748B;
+    font-size: 13px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+
+.mat-wizard-progress-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94A3B8;
+    text-align: center;
+    line-height: 1.3;
+}
+
+.mat-wizard-progress-line {
+    flex: 0.4;
+    height: 3px;
+    background: #E2E8F0;
+    border-radius: 2px;
+    margin-bottom: 18px;
+    transition: background 0.25s;
+}
+
+.mat-wizard-progress-step.active .mat-wizard-progress-num {
+    background: var(--primary);
+    color: #FFFFFF;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18);
+}
+
+.mat-wizard-progress-step.active .mat-wizard-progress-label {
+    color: #1D4ED8;
+}
+
+.mat-wizard-progress-step.completed .mat-wizard-progress-num {
+    background: #10B981;
+    color: #FFFFFF;
+}
+
+.mat-wizard-progress-step.completed .mat-wizard-progress-label {
+    color: #047857;
+}
+
+.mat-wizard-progress-line.completed {
+    background: #10B981;
+}
+
+.mat-wizard-step {
+    display: none;
+    opacity: 0;
+    transform: translateX(12px);
+}
+
+.mat-wizard-step.is-active {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: matWizardStepIn 0.28s ease forwards;
+}
+
+@keyframes matWizardStepIn {
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.mat-live-metric {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: #1E3A8A;
+    font-weight: 600;
+}
+
+.mat-live-metric strong {
+    color: #1D4ED8;
+    font-weight: 800;
+}
+
+.mat-tile-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.mat-tile-grid-wastage {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.mat-tile-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    text-align: left;
+    padding: 14px 14px 12px;
+    background: #FFFFFF;
+    border: 2px solid #E2E8F0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.18s, background 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+
+.mat-tile-card:hover {
+    border-color: #93C5FD;
+    background: #F8FBFF;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.1);
+}
+
+.mat-tile-card.selected {
+    border: 2px solid var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.16);
+}
+
+.mat-tile-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.mat-tile-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0F172A;
+}
+
+.mat-tile-desc {
+    font-size: 11.5px;
+    color: #64748B;
+    line-height: 1.4;
+}
+
+.mat-wizard-nav-btn {
+    padding: 11px 18px;
+    border-radius: 10px;
+    border: 1.5px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #334155;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.mat-wizard-nav-btn:hover:not(:disabled) {
+    border-color: #93C5FD;
+    color: #1D4ED8;
+    background: #EFF6FF;
+}
+
+.mat-wizard-nav-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.mat-wizard-nav-btn-primary {
+    background: var(--primary);
+    border-color: #1D4ED8;
+    color: #FFFFFF;
+}
+
+.mat-wizard-nav-btn-primary:hover:not(:disabled) {
+    background: #1D4ED8;
+    color: #FFFFFF;
+}
+
+@media (max-width: 700px) {
+    .mat-tile-grid,
+    .mat-tile-grid-quality {
+        grid-template-columns: 1fr;
+    }
+    .mat-wizard-progress-label {
+        font-size: 10px;
     }
 }

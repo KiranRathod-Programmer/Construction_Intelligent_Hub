@@ -459,6 +459,10 @@ function openModal(modalId) {
     if (modal) {
         modal.classList.add('active');
     }
+    if (modalId === 'materialEstimatorModal') {
+        goToWizardStep(1);
+        updateWizardLiveMetrics();
+    }
 }
 
 function closeModal(modalId) {
@@ -1331,6 +1335,7 @@ async function sendFloatingChatMessage() {
 // MATERIAL MANAGEMENT AI CONTROLLERS
 // ==========================================================================
 let currentMaterialEstimateData = null;
+let currentWizardStep = 1;
 
 function closeMaterialEstimate() {
     const outputContainer = document.getElementById('aiMatOutputContainer');
@@ -1339,27 +1344,129 @@ function closeMaterialEstimate() {
     if (outputBox) outputBox.style.display = 'none';
 }
 
-/**
- * Wizard helper: selects an option card and writes value to a hidden input.
- */
-function selectWizardOption(btn, gridId, hiddenInputId) {
-    const grid = document.getElementById(gridId);
-    if (grid) {
-        grid.querySelectorAll('.mat-wizard-opt').forEach(b => b.classList.remove('selected'));
+function goToWizardStep(step) {
+    const target = Math.max(1, Math.min(3, Number(step) || 1));
+    currentWizardStep = target;
+
+    document.querySelectorAll('#materialEstimatorModal .mat-wizard-step').forEach((el) => {
+        const isActive = Number(el.getAttribute('data-step')) === target;
+        el.classList.toggle('is-active', isActive);
+    });
+
+    document.querySelectorAll('#matWizardProgress .mat-wizard-progress-step').forEach((el) => {
+        const n = Number(el.getAttribute('data-progress'));
+        el.classList.toggle('active', n === target);
+        el.classList.toggle('completed', n < target);
+    });
+    document.querySelectorAll('#matWizardProgress .mat-wizard-progress-line').forEach((el) => {
+        const n = Number(el.getAttribute('data-line'));
+        el.classList.toggle('completed', n < target);
+    });
+
+    const backBtn = document.getElementById('matWizardBackBtn');
+    const nextBtn = document.getElementById('matWizardNextBtn');
+    const submitBtn = document.getElementById('matWizardSubmitBtn');
+    const hint = document.getElementById('matWizardFooterHint');
+
+    if (backBtn) backBtn.disabled = target === 1;
+    if (nextBtn) nextBtn.style.display = target === 3 ? 'none' : 'inline-flex';
+    if (submitBtn) submitBtn.style.display = target === 3 ? 'inline-flex' : 'none';
+    if (hint) {
+        const labels = [
+            'Step 1 of 3 · Enter length, width and floor height',
+            'Step 2 of 3 · Set floors and structure type',
+            'Step 3 of 3 · Choose finish quality and wastage'
+        ];
+        hint.textContent = labels[target - 1];
     }
-    btn.classList.add('selected');
-    const hiddenEl = document.getElementById(hiddenInputId);
-    if (hiddenEl) hiddenEl.value = btn.getAttribute('data-value') || btn.dataset.value || '';
+
+    updateWizardLiveMetrics();
+}
+
+function validateWizardStep(step) {
+    if (step === 1) {
+        const length = parseFloat(document.getElementById('wizMatLength')?.value || '0');
+        const width = parseFloat(document.getElementById('wizMatWidth')?.value || '0');
+        const height = parseFloat(document.getElementById('wizMatHeight')?.value || '0');
+        if (!(length > 0 && width > 0 && height > 0)) {
+            alert('Please enter Length, Width, and Floor Height greater than 0 before continuing.');
+            return false;
+        }
+        return true;
+    }
+    if (step === 2) {
+        const floors = parseInt(document.getElementById('wizMatFloors')?.value || '0', 10);
+        const structure = document.getElementById('wizMatStructure')?.value || '';
+        if (!floors || floors < 1 || floors > 100) {
+            alert('Number of floors must be between 1 and 100.');
+            return false;
+        }
+        if (!structure) {
+            alert('Please select a building structure type.');
+            return false;
+        }
+        return true;
+    }
+    if (step === 3) {
+        const quality = document.getElementById('wizMatQuality')?.value || '';
+        const wastage = document.getElementById('wizMatWastage')?.value || '';
+        if (!quality) {
+            alert('Please select a quality / specification level.');
+            return false;
+        }
+        if (!wastage) {
+            alert('Please select a wastage margin.');
+            return false;
+        }
+        return true;
+    }
+    return true;
+}
+
+function wizardNext() {
+    if (!validateWizardStep(currentWizardStep)) return;
+    goToWizardStep(currentWizardStep + 1);
+}
+
+function wizardBack() {
+    goToWizardStep(currentWizardStep - 1);
 }
 
 /**
- * Wizard helper: increment/decrement floors stepper.
+ * Tile selection: selectWizardOption(fieldId, value, element)
+ * Also accepts the legacy signature (btn, gridId, hiddenInputId).
  */
+function selectWizardOption(fieldId, value, element) {
+    if (typeof fieldId === 'string') {
+        const hiddenEl = document.getElementById(fieldId);
+        if (hiddenEl) hiddenEl.value = value;
+        const card = element;
+        if (card && card.parentElement) {
+            card.parentElement.querySelectorAll('.mat-tile-card, .mat-wizard-opt').forEach((b) => b.classList.remove('selected'));
+            card.classList.add('selected');
+        }
+        updateWizardLiveMetrics();
+        return;
+    }
+
+    const btn = fieldId;
+    const gridId = value;
+    const hiddenInputId = element;
+    const grid = document.getElementById(gridId);
+    if (grid) {
+        grid.querySelectorAll('.mat-wizard-opt, .mat-tile-card').forEach((b) => b.classList.remove('selected'));
+    }
+    if (btn && btn.classList) btn.classList.add('selected');
+    const hiddenEl = document.getElementById(hiddenInputId);
+    if (hiddenEl && btn) hiddenEl.value = btn.getAttribute('data-value') || btn.dataset.value || '';
+    updateWizardLiveMetrics();
+}
+
 function changeFloors(delta) {
     const input = document.getElementById('wizMatFloors');
-    const hint  = document.getElementById('wizFloorsHint');
+    const hint = document.getElementById('wizFloorsHint');
     if (!input) return;
-    let val = parseInt(input.value, 10) || 1;
+    let val = parseInt(input.value, 10) || 2;
     val = Math.max(1, Math.min(100, val + delta));
     input.value = val;
     if (hint) {
@@ -1367,104 +1474,207 @@ function changeFloors(delta) {
         else if (val === 2) hint.textContent = 'G + 1 Floor';
         else hint.textContent = `G + ${val - 1} Floors`;
     }
+    updateWizardLiveMetrics();
 }
 
-/**
- * Derives technical construction params from the 6 conversational wizard answers.
- * Maps user-friendly choices → engineering specs needed by the prompt engine.
- */
-function deriveWizardParams(projName, projType, areaSqFt, numFloors, location, soilType, quality) {
-    // Building type derivation
-    const buildingTypeMap = {
-        'Residential':    'RCC Frame Structure',
-        'Commercial':     'RCC Frame Structure',
-        'Industrial':     'Structural Steel Frame',
-        'Infrastructure': 'Hybrid Composite Structure',
-        'Institutional':  'RCC Frame Structure',
-        'Other':          'RCC Frame Structure'
+function updateWizardLiveMetrics() {
+    const length = parseFloat(document.getElementById('wizMatLength')?.value || '0');
+    const width = parseFloat(document.getElementById('wizMatWidth')?.value || '0');
+    const floors = parseInt(document.getElementById('wizMatFloors')?.value || '2', 10) || 2;
+    const footprintEl = document.getElementById('wizFootprintMetric');
+    const builtUpEl = document.getElementById('wizBuiltUpMetric');
+
+    if (!(length > 0 && width > 0)) {
+        if (footprintEl) footprintEl.innerHTML = 'Footprint Area: <strong>—</strong>';
+        if (builtUpEl) builtUpEl.innerHTML = 'Total Built-Up Area: <strong>—</strong>';
+        return;
+    }
+
+    const footprintSqM = length * width;
+    const footprintSqFt = footprintSqM * 10.7639;
+    const builtUpSqM = footprintSqM * floors;
+    const builtUpSqFt = builtUpSqM * 10.7639;
+
+    if (footprintEl) {
+        footprintEl.innerHTML = `Footprint Area: <strong>${footprintSqM.toFixed(2)} m²</strong> &nbsp;·&nbsp; <strong>${footprintSqFt.toFixed(1)} sq ft</strong>`;
+    }
+    if (builtUpEl) {
+        builtUpEl.innerHTML = `Total Built-Up Area (L × W × Floors): <strong>${builtUpSqM.toFixed(2)} m²</strong> &nbsp;·&nbsp; <strong>${builtUpSqFt.toFixed(1)} sq ft</strong>`;
+    }
+}
+
+function deriveWizardParams() {
+    const length = parseFloat(document.getElementById('wizMatLength')?.value || '0');
+    const width = parseFloat(document.getElementById('wizMatWidth')?.value || '0');
+    const height = parseFloat(document.getElementById('wizMatHeight')?.value || '0');
+    const floors = parseInt(document.getElementById('wizMatFloors')?.value || '2', 10);
+    const structureType = document.getElementById('wizMatStructure')?.value || 'Residential House';
+    const quality = document.getElementById('wizMatQuality')?.value || 'Standard';
+    const wastageBuffer = document.getElementById('wizMatWastage')?.value || '10%';
+    const projName = (document.getElementById('wizMatProjectName')?.value || '').trim() || `${structureType} Estimate`;
+    const location = (document.getElementById('wizMatLocation')?.value || '').trim() || 'Active Site';
+
+    const footprintSqM = length * width;
+    const builtUpSqFt = footprintSqM * floors * 10.7639;
+    const areaSqFt = footprintSqM * 10.7639;
+
+    const structureMap = {
+        'Residential House': { projectType: 'Residential', buildingType: 'RCC Frame Structure', foundation: 'Isolated Footings', soil: 'Sandy Loam / Silt' },
+        'Commercial / Office': { projectType: 'Commercial', buildingType: 'RCC Frame Structure', foundation: 'Raft / Mat Foundation', soil: 'Clayey Soil (High Plasticity)' },
+        'Industrial / Warehouse': { projectType: 'Industrial', buildingType: 'Structural Steel Frame', foundation: 'Deep Pile Foundation', soil: 'Hard Rock / Bedrock' }
     };
 
-    // Foundation type derivation
-    const foundationMap = {
-        'Residential':    'Isolated Footings',
-        'Commercial':     'Raft / Mat Foundation',
-        'Industrial':     'Deep Pile Foundation',
-        'Infrastructure': 'Deep Pile Foundation',
-        'Institutional':  'Raft / Mat Foundation',
-        'Other':          'Isolated Footings'
-    };
-
-    // Concrete mix & wastage from quality
     const qualityMap = {
-        'Standard': { mixRatio: 'M20 (1:1.5:3)', wastageBuffer: '8%' },
-        'Premium':  { mixRatio: 'M25 (1:1:2)',   wastageBuffer: '10%' },
-        'Custom':   { mixRatio: 'M30 (1:0.75:1.5)', wastageBuffer: '12%' }
+        Economy: { mixRatio: 'M20 (1:1.5:3)', steelGrade: 'Fe415 TMT', steelKgPerSqft: 3.5, laborRatePerSqft: 160 },
+        Standard: { mixRatio: 'M25 (1:1:2)', steelGrade: 'Fe500 TMT', steelKgPerSqft: 4.2, laborRatePerSqft: 210 },
+        Luxury: { mixRatio: 'M30 (1:0.75:1.5)', steelGrade: 'Fe550 TMT', steelKgPerSqft: 5.0, laborRatePerSqft: 280 }
     };
 
-    const bType      = buildingTypeMap[projType]  || 'RCC Frame Structure';
-    const foundation = foundationMap[projType]    || 'Raft / Mat Foundation';
-    const qSpec      = qualityMap[quality]        || qualityMap['Standard'];
-    const totalAreaSqFt = areaSqFt * Math.max(1, Math.min(numFloors, 100));
+    const sSpec = structureMap[structureType] || structureMap['Residential House'];
+    const qSpec = qualityMap[quality] || qualityMap.Standard;
 
     return {
-        projectName: projName, projName,
+        projectName: projName,
+        projName,
         location,
-        projectType: projType, pType: projType,
-        buildingType: bType,   bType,
-        areaSqFt, numFloors, totalAreaSqFt,
-        soil: soilType,
-        foundation,
-        mixRatio:      qSpec.mixRatio,
-        wastageBuffer: qSpec.wastageBuffer,
+        length, width, height,
+        numFloors: floors,
+        structureType,
+        quality,
+        projectType: sSpec.projectType,
+        pType: sSpec.projectType,
+        buildingType: sSpec.buildingType,
+        bType: sSpec.buildingType,
+        areaSqFt: Math.round(areaSqFt),
+        totalAreaSqFt: Math.round(builtUpSqFt),
+        footprintSqM,
+        builtUpSqFt: Math.round(builtUpSqFt * 10) / 10,
+        soil: sSpec.soil,
+        foundation: sSpec.foundation,
+        mixRatio: qSpec.mixRatio,
+        steelGrade: qSpec.steelGrade,
+        steelKgPerSqft: qSpec.steelKgPerSqft,
+        laborRatePerSqft: qSpec.laborRatePerSqft,
+        wastageBuffer,
         unitSystem: 'Metric (SI Units)'
     };
 }
 
-/**
- * Validates wizard inputs and submits estimate.
- * Called by "Generate Material Estimate" button.
- */
+function computeLocalCostBreakdown(p) {
+    const wastage = (parseFloat(String(p.wastageBuffer || '10').replace('%', '')) || 10) / 100;
+    const builtUpSqFt = Number(p.totalAreaSqFt) || 0;
+    const builtUpSqM = (Number(p.footprintSqM) || 0) * (Number(p.numFloors) || 1);
+    const steelKgPerSqft = Number(p.steelKgPerSqft) || 4.2;
+    const fmtInr = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+    const fmtNum = (n) => Number(n).toLocaleString('en-IN');
+
+    const concreteNet = Math.max(1, Math.round(builtUpSqM * 0.15 * 1.3));
+    const concreteTotal = Math.round(concreteNet * (1 + wastage));
+    const concreteCost = concreteTotal * 6200;
+
+    const cementNet = Math.round(concreteNet * 7.5);
+    const cementTotal = Math.round(cementNet * (1 + wastage));
+    const cementCost = cementTotal * 410;
+
+    const steelKgNet = builtUpSqFt * steelKgPerSqft;
+    const steelMTNet = steelKgNet / 1000;
+    const steelMTTotal = steelMTNet * (1 + wastage);
+    const steelCost = steelMTTotal * 63500;
+
+    const brickNet = Math.round(builtUpSqFt * 8);
+    const brickTotal = Math.round(brickNet * (1 + wastage));
+    const brickCost = brickTotal * 8;
+
+    const laborCost = builtUpSqFt * (Number(p.laborRatePerSqft) || 210);
+
+    const sandTotal = Math.round(builtUpSqFt * 0.25 * (1 + wastage));
+    const sandCost = sandTotal * 55;
+    const aggTotal = Math.round(builtUpSqFt * 0.36 * (1 + wastage));
+    const aggCost = aggTotal * 42;
+
+    const grandTotal = concreteCost + cementCost + steelCost + brickCost + laborCost + sandCost + aggCost;
+
+    const markdown = `# 🏗️ Material Estimation Report — ${p.projName}
+
+Local quantity survey for **${fmtNum(builtUpSqFt)} sq ft** (${p.structureType}, ${p.numFloors} floors, mix ${p.mixRatio}, steel ${p.steelGrade}). Wastage buffer **${p.wastageBuffer}**.
+
+## 🪨 Ready-Mix Concrete (${p.mixRatio})
+**Quantity:** ${fmtNum(concreteTotal)} m³ (${fmtNum(concreteNet)} net + wastage)
+**Estimated Cost:** ${fmtInr(concreteCost)} (@ ₹6,200 / m³)
+
+## 🧱 Cement
+**Quantity:** ${fmtNum(cementTotal)} Bags
+**Estimated Cost:** ${fmtInr(cementCost)} (@ ₹410 / bag)
+
+## 🔩 Steel Rebar (${p.steelGrade})
+**Quantity:** ${steelMTTotal.toFixed(2)} MT (${steelKgPerSqft} kg/sq ft)
+**Estimated Cost:** ${fmtInr(steelCost)} (@ ₹63,500 / MT)
+
+## 🧱 Bricks (Masonry)
+**Quantity:** ${fmtNum(brickTotal)} nos
+**Estimated Cost:** ${fmtInr(brickCost)} (@ ₹8 / brick)
+
+## 👷 Labour
+**Rate:** ₹${p.laborRatePerSqft} / sq ft × ${fmtNum(builtUpSqFt)} sq ft
+**Estimated Cost:** ${fmtInr(laborCost)}
+
+## 🪣 Sand & Aggregates
+**Sand:** ${fmtNum(sandTotal)} cu.ft — ${fmtInr(sandCost)}
+**Coarse Aggregates:** ${fmtNum(aggTotal)} cu.ft — ${fmtInr(aggCost)}
+
+## 💰 Grand Total Estimated Material + Labour Budget
+**${fmtInr(grandTotal)}** *(Includes ${p.wastageBuffer} wastage allowance)*
+`;
+
+    return {
+        concreteM3: concreteTotal,
+        cementBags: cementTotal,
+        steelMT: Number(steelMTTotal.toFixed(2)),
+        bricks: brickTotal,
+        laborCost,
+        grandTotal,
+        grandTotalDisplay: fmtInr(grandTotal),
+        markdown,
+        items: [
+            { name: 'Ready-Mix Concrete', totalQty: `${fmtNum(concreteTotal)} m³`, cost: fmtInr(concreteCost) },
+            { name: 'Cement', totalQty: `${fmtNum(cementTotal)} Bags`, cost: fmtInr(cementCost) },
+            { name: `Steel Rebar (${p.steelGrade})`, totalQty: `${steelMTTotal.toFixed(2)} MT`, cost: fmtInr(steelCost) },
+            { name: 'Bricks', totalQty: `${fmtNum(brickTotal)} nos`, cost: fmtInr(brickCost) },
+            { name: 'Labour', totalQty: `${fmtNum(builtUpSqFt)} sq ft`, cost: fmtInr(laborCost) }
+        ]
+    };
+}
+
+function saveMaterialEstimationLog(entry) {
+    const key = 'cih_material_estimations';
+    let list = [];
+    try {
+        list = JSON.parse(localStorage.getItem(key) || '[]');
+        if (!Array.isArray(list)) list = [];
+    } catch (e) {
+        list = [];
+    }
+    list.unshift(entry);
+    localStorage.setItem(key, JSON.stringify(list.slice(0, 50)));
+}
+
 async function submitMaterialWizard() {
-    // --- Read wizard fields ---
-    const projName  = (document.getElementById('wizMatProjectName')?.value || '').trim();
-    const projType  = document.getElementById('wizMatProjectType')?.value  || '';
-    const areaSqFt  = parseFloat(document.getElementById('wizMatAreaSqFt')?.value  || '0');
-    const numFloors = parseInt(document.getElementById('wizMatFloors')?.value || '1', 10);
-    const location  = (document.getElementById('wizMatLocation')?.value || '').trim();
-    const soilType  = document.getElementById('wizMatSoilType')?.value  || '';
-    const quality   = document.getElementById('wizMatQuality')?.value   || '';
+    if (!validateWizardStep(1)) { goToWizardStep(1); return; }
+    if (!validateWizardStep(2)) { goToWizardStep(2); return; }
+    if (!validateWizardStep(3)) { goToWizardStep(3); return; }
 
-    // --- Validation ---
-    const errors = [];
-    if (!projName)          errors.push('Project name (Q1)');
-    if (!projType)          errors.push('Project type (Q2)');
-    if (!areaSqFt || areaSqFt < 50) errors.push('Construction area — minimum 50 sq.ft (Q3)');
-    if (!location)          errors.push('Site location (Q4)');
-    if (!soilType)          errors.push('Soil type (Q5)');
-    if (!quality)           errors.push('Construction quality (Q6)');
-
-    if (errors.length > 0) {
-        // Highlight the submit button briefly to indicate error
-        const btn = document.getElementById('matWizardSubmitBtn');
-        if (btn) {
-            btn.style.background = '#EF4444';
-            btn.textContent = '⚠️ Please fill: ' + errors.join(', ');
-            setTimeout(() => {
-                btn.style.background = '';
-                btn.innerHTML = '<span class="mat-wizard-btn-icon">🚀</span> Generate Material Estimate';
-            }, 3500);
-        }
-        return;
+    const materialData = deriveWizardParams();
+    const localBreakdown = computeLocalCostBreakdown(materialData);
+    const btn = document.getElementById('matWizardSubmitBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="mat-wizard-btn-icon">⏳</span> Calculating...';
     }
 
-    // --- Derive technical params ---
-    const materialData = deriveWizardParams(projName, projType, areaSqFt, numFloors, location, soilType, quality);
-
-    // --- Close wizard modal, show output area ---
     closeModal('materialEstimatorModal');
 
     const outputContainer = document.getElementById('aiMatOutputContainer');
-    const outputBox       = document.getElementById('aiMatOutputBox');
+    const outputBox = document.getElementById('aiMatOutputBox');
 
     if (outputContainer) {
         outputContainer.style.display = 'block';
@@ -1473,54 +1683,69 @@ async function submitMaterialWizard() {
     if (!outputBox) return;
     outputBox.style.display = 'block';
 
-    // --- Loading state ---
-    const totalSqFtDisplay = (areaSqFt * numFloors).toLocaleString('en-IN');
+    const totalSqFtDisplay = Number(materialData.totalAreaSqFt).toLocaleString('en-IN');
     outputBox.innerHTML = `
         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 32px 24px; text-align: center; box-shadow: 0 4px 16px rgba(0,0,0,0.04);">
             <div class="cih-spinner" style="width: 40px; height: 40px; margin: 0 auto 16px; border: 3px solid #E2E8F0; border-top-color: #2563EB; border-radius: 50%; animation: cihSpin 0.8s linear infinite;"></div>
             <div style="font-size: 16px; font-weight: 700; color: #0F172A; margin-bottom: 6px;">🤖 Computing Material Quantities with Llama 3.2...</div>
             <div style="font-size: 13px; color: #64748B; max-width: 520px; margin: 0 auto 14px; line-height: 1.6;">
-                Calculating accurate BOQ, wastage buffers (${materialData.wastageBuffer}), unit rates, and total budget for <strong>${projName}</strong> (${totalSqFtDisplay} sq.ft total built-up area).
+                ${materialData.length} m × ${materialData.width} m × ${materialData.numFloors} floors (${totalSqFtDisplay} sq.ft built-up) · ${materialData.mixRatio} · ${materialData.steelGrade} · wastage ${materialData.wastageBuffer}.
             </div>
-            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #1D4ED8; background: #EFF6FF; border: 1px solid #BFDBFE; padding: 4px 12px; border-radius: 20px;">
-                <span style="background: #10B981; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>
-                Active Engine: Llama 3.2 (Local Neural Inference)
-            </span>
         </div>`;
 
+    let aiResult;
+    let source = 'ollama';
     try {
-        // Call AI with derived params — enforcing llama3.2
-        const aiResult = await CIH_AI_SERVICE.estimateMaterials(materialData, '', 'llama3.2');
-
-        currentMaterialEstimateData = {
-            ...materialData,
-            rawText: aiResult.rawText,
-            html: aiResult.html,
-            date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-        };
-
-        outputBox.innerHTML = renderMaterialEstimateCards(aiResult, materialData);
-
+        aiResult = await CIH_AI_SERVICE.estimateMaterials(materialData, '', 'llama3.2');
+        if (!aiResult || !aiResult.rawText) throw new Error('Empty AI response');
     } catch (err) {
-        console.error('[Material AI] Error:', err);
-        outputBox.innerHTML = `
-            <div style="background: #FFFFFF; border: 1px solid #FECACA; border-radius: 12px; padding: 24px; color: #991B1B;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span style="font-size: 20px;">⚠️</span>
-                    <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: #B91C1C;">AI Estimation Notice</h4>
-                </div>
-                <p style="font-size: 13.5px; margin: 0 0 16px; color: #475569;">
-                    Llama 3.2 returned: <code>${err.message || 'Service offline'}</code>. Make sure Ollama is running on port 11434, then retry.
-                </p>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn-primary" style="font-size: 12.5px; padding: 7px 16px; background: #2563EB;" onclick="openModal('materialEstimatorModal')">✏️ Edit & Retry</button>
-                    <button class="btn-secondary" style="font-size: 12.5px; padding: 7px 14px;" onclick="closeMaterialEstimate()">✕ Dismiss</button>
-                </div>
-            </div>`;
+        console.warn('[Material AI] Using local cost_breakdown fallback:', err);
+        source = 'local';
+        aiResult = {
+            projectName: materialData.projName,
+            rawText: localBreakdown.markdown,
+            html: AIUtils.formatMarkdownToHTML(localBreakdown.markdown)
+        };
+    }
+
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    currentMaterialEstimateData = {
+        ...materialData,
+        rawText: aiResult.rawText,
+        html: aiResult.html,
+        date: dateStr,
+        cost_breakdown: localBreakdown,
+        source
+    };
+
+    saveMaterialEstimationLog({
+        id: 'EST-' + Date.now(),
+        project_name: materialData.projName,
+        created_at: new Date().toISOString(),
+        length: materialData.length,
+        width: materialData.width,
+        height: materialData.height,
+        floors: materialData.numFloors,
+        structure_type: materialData.structureType,
+        quality: materialData.quality,
+        wastage: materialData.wastageBuffer,
+        footprint_sqm: materialData.footprintSqM,
+        built_up_sqft: materialData.totalAreaSqFt,
+        mix_ratio: materialData.mixRatio,
+        steel_grade: materialData.steelGrade,
+        grand_total: localBreakdown.grandTotal,
+        source
+    });
+
+    outputBox.innerHTML = renderMaterialEstimateCards(aiResult, currentMaterialEstimateData);
+    outputContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="mat-wizard-btn-icon">🚀</span> Calculate AI Quantities &amp; Cost Breakdown';
     }
 }
 
-// Legacy alias — kept so any direct calls still work
 async function triggerMaterialAIEstimate() {
     await submitMaterialWizard();
 }
@@ -1576,6 +1801,14 @@ function renderMaterialEstimateCards(aiResult, d) {
         { name: 'Paint & Primer (Int/Ext)', grade: 'Weatherproof Exterior + Premium Emulsion', net: `${fmtNum(paintTotalLit)} L`, wastage: 'Included', totalQty: `${fmtNum(paintTotalLit)} Liters`, rate: '₹380 / L', cost: fmtInr(paintCost) },
         { name: 'Waterproofing Compound', grade: 'Polymer-Modified Integral Compound', net: `${fmtNum(wpLitres)} L`, wastage: 'Included', totalQty: `${fmtNum(wpLitres)} Liters`, rate: '₹680 / L', cost: fmtInr(wpCost) }
     ];
+
+    if (d.cost_breakdown) {
+        const cb = d.cost_breakdown;
+        materials.push(
+            { name: 'Bricks (Masonry)', grade: 'Standard burnt clay / fly-ash bricks', net: `${fmtNum(cb.bricks)} nos`, wastage: d.wastageBuffer || '10%', totalQty: `${fmtNum(cb.bricks)} nos`, rate: '₹8 / brick', cost: (cb.items.find(i => i.name === 'Bricks') || {}).cost || '—' },
+            { name: 'Labour', grade: `Site labour @ ₹${d.laborRatePerSqft || 210}/sq ft`, net: `${fmtNum(totalSqFt)} sq.ft`, wastage: 'N/A', totalQty: `${fmtNum(totalSqFt)} sq.ft`, rate: `₹${d.laborRatePerSqft || 210} / sq ft`, cost: fmtInr(cb.laborCost) }
+        );
+    }
 
     if (currentMaterialEstimateData) {
         currentMaterialEstimateData.calculatedMaterials = materials;
@@ -1649,6 +1882,17 @@ function renderMaterialEstimateCards(aiResult, d) {
                 <div style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 4px 0;">${fmtNum(cementBagsTotal)} Bags</div>
                 <div style="font-size: 11px; color: #64748B;">OPC 53 / PPC standard (IS 8112)</div>
             </div>
+            ${d.cost_breakdown ? `
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">BRICKS</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 4px 0;">${Number(d.cost_breakdown.bricks).toLocaleString('en-IN')} nos</div>
+                <div style="font-size: 11px; color: #64748B;">Masonry allowance with wastage</div>
+            </div>
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">LABOUR</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0F172A; margin: 4px 0;">${fmtInr(d.cost_breakdown.laborCost)}</div>
+                <div style="font-size: 11px; color: #64748B;">₹${d.laborRatePerSqft || 210} per sq ft of built-up area</div>
+            </div>` : ''}
         </div>
 
         <!-- FULL AI-GENERATED REPORT DIRECTLY DISPLAYED (NO ACCORDION / COLLAPSIBLE) -->

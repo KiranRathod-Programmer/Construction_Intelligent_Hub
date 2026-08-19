@@ -154,145 +154,179 @@
         </footer>
     </div>
 
-    <!-- AI MATERIAL ESTIMATOR — CONVERSATIONAL WIZARD MODAL -->
+    <!-- AI MATERIAL ESTIMATOR — 3-STEP INTERACTIVE WIZARD -->
     <div class="modal-overlay" id="materialEstimatorModal">
         <div class="modal-content mat-wizard-modal">
             <button class="modal-close" onclick="closeModal('materialEstimatorModal')">✕</button>
 
-            <!-- Wizard Header -->
             <div class="mat-wizard-header">
-                <div class="mat-wizard-header-icon">🤖</div>
+                <div class="mat-wizard-header-icon">🏗️</div>
                 <div>
                     <h3 class="mat-wizard-title">AI Material Estimator</h3>
-                    <p class="mat-wizard-subtitle">Powered by Llama 3.2 · Answer the questions below and the AI will calculate your complete material BOQ.</p>
+                    <p class="mat-wizard-subtitle">3-step wizard · dimensions, structure, and finish quality feed Llama 3.2 for a full BOQ.</p>
                 </div>
             </div>
 
-            <!-- AI Intro Message -->
-            <div class="mat-wizard-ai-message">
-                <span class="mat-wizard-ai-dot"></span>
-                <p>Hello! I'm your CIH Material AI — a Senior Quantity Surveyor powered by <strong>Llama 3.2</strong>. Tell me about your construction project and I'll estimate every material you need with quantities, wastage buffers, and INR costs.</p>
+            <div class="mat-wizard-progress" id="matWizardProgress" aria-label="Estimation progress">
+                <div class="mat-wizard-progress-step active" data-progress="1">
+                    <span class="mat-wizard-progress-num">1</span>
+                    <span class="mat-wizard-progress-label">Dimensions &amp; Area</span>
+                </div>
+                <div class="mat-wizard-progress-line" data-line="1"></div>
+                <div class="mat-wizard-progress-step" data-progress="2">
+                    <span class="mat-wizard-progress-num">2</span>
+                    <span class="mat-wizard-progress-label">Structure &amp; Floors</span>
+                </div>
+                <div class="mat-wizard-progress-line" data-line="2"></div>
+                <div class="mat-wizard-progress-step" data-progress="3">
+                    <span class="mat-wizard-progress-num">3</span>
+                    <span class="mat-wizard-progress-label">Finish &amp; Quality</span>
+                </div>
             </div>
 
-            <!-- Question Form — all questions visible, conversational card layout -->
-            <div class="mat-wizard-form">
+            <div class="mat-wizard-form" id="matWizardForm">
 
-                <!-- Q1: Project Name -->
-                <div class="mat-wizard-question">
-                    <div class="mat-wizard-q-label">
-                        <span class="mat-wizard-q-num">1</span>
-                        <span>What is the name or description of your project?</span>
-                    </div>
-                    <input type="text" class="form-input mat-wizard-input" id="wizMatProjectName"
-                        placeholder="e.g. My Villa in Pune, Tech Park Block B, Warehouse Sector 5…"
-                        autocomplete="off">
-                </div>
-
-                <!-- Q2: Project Type -->
-                <div class="mat-wizard-question">
-                    <div class="mat-wizard-q-label">
-                        <span class="mat-wizard-q-num">2</span>
-                        <span>What type of construction is this?</span>
-                    </div>
-                    <div class="mat-wizard-option-grid" id="wizProjectTypeGrid">
-                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Residential" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏠<br><span>Residential</span></button>
-                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Commercial" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏢<br><span>Commercial</span></button>
-                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Industrial" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏭<br><span>Industrial</span></button>
-                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Infrastructure" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🌉<br><span>Infrastructure</span></button>
-                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Institutional" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🏫<br><span>Institutional</span></button>
-                        <button class="mat-wizard-opt" data-target="wizMatProjectType" data-value="Other" onclick="selectWizardOption(this, 'wizProjectTypeGrid', 'wizMatProjectType')">🔧<br><span>Other</span></button>
-                    </div>
-                    <input type="hidden" id="wizMatProjectType" value="">
-                </div>
-
-                <!-- Q3: Area + Floors -->
-                <div class="mat-wizard-question">
-                    <div class="mat-wizard-q-label">
-                        <span class="mat-wizard-q-num">3</span>
-                        <span>What is the construction area and number of floors?</span>
-                    </div>
-                    <div class="mat-wizard-row">
-                        <div style="flex:1;">
-                            <label class="mat-wizard-input-label">Area (Square Feet)</label>
-                            <input type="number" class="form-input mat-wizard-input" id="wizMatAreaSqFt"
-                                placeholder="e.g. 1500" min="100">
+                <!-- STEP 1: Dimensions & Area -->
+                <div class="mat-wizard-step is-active" data-step="1">
+                    <div class="mat-wizard-question">
+                        <div class="mat-wizard-q-label">
+                            <span class="mat-wizard-q-num">1</span>
+                            <span>Building footprint dimensions</span>
                         </div>
-                        <div style="flex:1;">
-                            <label class="mat-wizard-input-label">Number of Floors</label>
-                            <div class="mat-wizard-stepper">
-                                <button type="button" class="mat-stepper-btn" onclick="changeFloors(-1)">−</button>
-                                <input type="number" class="form-input mat-wizard-input mat-stepper-input" id="wizMatFloors" value="1" min="1" max="100" readonly>
-                                <button type="button" class="mat-stepper-btn" onclick="changeFloors(1)">+</button>
+                        <div class="mat-wizard-row">
+                            <div style="flex:1;">
+                                <label class="mat-wizard-input-label" for="wizMatLength">Length (m)</label>
+                                <input type="number" class="form-input mat-wizard-input" id="wizMatLength"
+                                    placeholder="e.g. 12" min="0.5" step="0.1" oninput="updateWizardLiveMetrics()">
                             </div>
-                            <div class="mat-wizard-floors-hint" id="wizFloorsHint">Ground Floor (G)</div>
+                            <div style="flex:1;">
+                                <label class="mat-wizard-input-label" for="wizMatWidth">Width (m)</label>
+                                <input type="number" class="form-input mat-wizard-input" id="wizMatWidth"
+                                    placeholder="e.g. 9" min="0.5" step="0.1" oninput="updateWizardLiveMetrics()">
+                            </div>
+                            <div style="flex:1;">
+                                <label class="mat-wizard-input-label" for="wizMatHeight">Floor Height (m)</label>
+                                <input type="number" class="form-input mat-wizard-input" id="wizMatHeight"
+                                    placeholder="e.g. 3" min="2" step="0.1" value="3" oninput="updateWizardLiveMetrics()">
+                            </div>
                         </div>
+                        <div class="mat-live-metric" id="wizFootprintMetric">
+                            Footprint Area: <strong>—</strong>
+                        </div>
+                        <div class="mat-wizard-hint">Length × Width is calculated live in m² and sq ft. All three values must be greater than 0.</div>
+                    </div>
+                    <div class="mat-wizard-question">
+                        <div class="mat-wizard-q-label">
+                            <span class="mat-wizard-q-num">•</span>
+                            <span>Project name <em style="font-weight:500;color:#94A3B8;">(optional)</em></span>
+                        </div>
+                        <input type="text" class="form-input mat-wizard-input" id="wizMatProjectName"
+                            placeholder="e.g. My Villa in Pune" autocomplete="off">
+                        <input type="hidden" id="wizMatLocation" value="Active Site">
                     </div>
                 </div>
 
-                <!-- Q4: Location -->
-                <div class="mat-wizard-question">
-                    <div class="mat-wizard-q-label">
-                        <span class="mat-wizard-q-num">4</span>
-                        <span>Where is the construction site located?</span>
+                <!-- STEP 2: Structure & Floors -->
+                <div class="mat-wizard-step" data-step="2">
+                    <div class="mat-wizard-question">
+                        <div class="mat-wizard-q-label">
+                            <span class="mat-wizard-q-num">2</span>
+                            <span>Number of floors</span>
+                        </div>
+                        <div class="mat-wizard-stepper" style="max-width: 280px;">
+                            <button type="button" class="mat-stepper-btn" onclick="changeFloors(-1)">−</button>
+                            <input type="number" class="form-input mat-wizard-input mat-stepper-input" id="wizMatFloors" value="2" min="1" max="100" readonly>
+                            <button type="button" class="mat-stepper-btn" onclick="changeFloors(1)">+</button>
+                        </div>
+                        <div class="mat-wizard-floors-hint" id="wizFloorsHint">G + 1 Floor</div>
                     </div>
-                    <input type="text" class="form-input mat-wizard-input" id="wizMatLocation"
-                        placeholder="e.g. Baner, Pune · Whitefield, Bangalore · Dubai Marina…"
-                        autocomplete="off">
-                    <div class="mat-wizard-hint">Location helps the AI consider local construction norms and material availability.</div>
+                    <div class="mat-wizard-question">
+                        <div class="mat-wizard-q-label">
+                            <span class="mat-wizard-q-num">2</span>
+                            <span>Building structure type</span>
+                        </div>
+                        <div class="mat-tile-grid" id="wizStructureGrid">
+                            <button type="button" class="mat-tile-card" data-value="Residential House" onclick="selectWizardOption('wizMatStructure', 'Residential House', this)">
+                                <span class="mat-tile-icon">🏠</span>
+                                <span class="mat-tile-title">Residential House</span>
+                                <span class="mat-tile-desc">RCC frame · isolated footings · typical villa / apartment</span>
+                            </button>
+                            <button type="button" class="mat-tile-card" data-value="Commercial / Office" onclick="selectWizardOption('wizMatStructure', 'Commercial / Office', this)">
+                                <span class="mat-tile-icon">🏢</span>
+                                <span class="mat-tile-title">Commercial / Office</span>
+                                <span class="mat-tile-desc">RCC frame · raft foundation · office / mixed-use</span>
+                            </button>
+                            <button type="button" class="mat-tile-card" data-value="Industrial / Warehouse" onclick="selectWizardOption('wizMatStructure', 'Industrial / Warehouse', this)">
+                                <span class="mat-tile-icon">🏭</span>
+                                <span class="mat-tile-title">Industrial / Warehouse</span>
+                                <span class="mat-tile-desc">Steel frame · pile foundation · sheds &amp; plants</span>
+                            </button>
+                        </div>
+                        <input type="hidden" id="wizMatStructure" value="">
+                    </div>
+                    <div class="mat-live-metric" id="wizBuiltUpMetric">
+                        Total Built-Up Area: <strong>—</strong>
+                    </div>
                 </div>
 
-                <!-- Q5: Soil Type -->
-                <div class="mat-wizard-question">
-                    <div class="mat-wizard-q-label">
-                        <span class="mat-wizard-q-num">5</span>
-                        <span>What is the soil type at the site?</span>
+                <!-- STEP 3: Finish & Quality -->
+                <div class="mat-wizard-step" data-step="3">
+                    <div class="mat-wizard-question">
+                        <div class="mat-wizard-q-label">
+                            <span class="mat-wizard-q-num">3</span>
+                            <span>Quality / specification level</span>
+                        </div>
+                        <div class="mat-tile-grid mat-tile-grid-quality" id="wizQualityGrid">
+                            <button type="button" class="mat-tile-card" data-value="Economy" onclick="selectWizardOption('wizMatQuality', 'Economy', this)">
+                                <span class="mat-tile-icon">⭐</span>
+                                <span class="mat-tile-title">Economy / Basic</span>
+                                <span class="mat-tile-desc">M20 concrete · Fe415 steel · basic finishes · ~3.5 kg/sq ft steel</span>
+                            </button>
+                            <button type="button" class="mat-tile-card selected" data-value="Standard" onclick="selectWizardOption('wizMatQuality', 'Standard', this)">
+                                <span class="mat-tile-icon">⭐⭐</span>
+                                <span class="mat-tile-title">Standard / Premium</span>
+                                <span class="mat-tile-desc">M25 concrete · Fe500 steel · premium finishes · ~4.2 kg/sq ft steel</span>
+                            </button>
+                            <button type="button" class="mat-tile-card" data-value="Luxury" onclick="selectWizardOption('wizMatQuality', 'Luxury', this)">
+                                <span class="mat-tile-icon">✨</span>
+                                <span class="mat-tile-title">Luxury / High-End</span>
+                                <span class="mat-tile-desc">M30+ concrete · Fe550 steel · custom finishes · ~5.0 kg/sq ft steel</span>
+                            </button>
+                        </div>
+                        <input type="hidden" id="wizMatQuality" value="Standard">
                     </div>
-                    <div class="mat-wizard-option-grid mat-wizard-option-grid-5" id="wizSoilTypeGrid">
-                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Sandy Soil (Coarse Grained)">🏖️<br><span>Sandy</span></button>
-                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Clayey Soil (High Plasticity)">🟫<br><span>Clay</span></button>
-                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Hard Rock / Bedrock">🪨<br><span>Rocky</span></button>
-                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Sandy Loam / Silt">🌱<br><span>Loamy</span></button>
-                        <button class="mat-wizard-opt" onclick="selectWizardOption(this, 'wizSoilTypeGrid', 'wizMatSoilType')" data-value="Clayey Soil (High Plasticity)">❓<br><span>Unknown</span></button>
+                    <div class="mat-wizard-question">
+                        <div class="mat-wizard-q-label">
+                            <span class="mat-wizard-q-num">3</span>
+                            <span>Wastage margin overhead</span>
+                        </div>
+                        <div class="mat-tile-grid mat-tile-grid-wastage" id="wizWastageGrid">
+                            <button type="button" class="mat-tile-card" data-value="5%" onclick="selectWizardOption('wizMatWastage', '5%', this)">
+                                <span class="mat-tile-title">5%</span>
+                                <span class="mat-tile-desc">Tight site control</span>
+                            </button>
+                            <button type="button" class="mat-tile-card selected" data-value="10%" onclick="selectWizardOption('wizMatWastage', '10%', this)">
+                                <span class="mat-tile-title">10%</span>
+                                <span class="mat-tile-desc">Typical site buffer</span>
+                            </button>
+                            <button type="button" class="mat-tile-card" data-value="15%" onclick="selectWizardOption('wizMatWastage', '15%', this)">
+                                <span class="mat-tile-title">15%</span>
+                                <span class="mat-tile-desc">Complex / remote site</span>
+                            </button>
+                        </div>
+                        <input type="hidden" id="wizMatWastage" value="10%">
                     </div>
-                    <input type="hidden" id="wizMatSoilType" value="">
                 </div>
 
-                <!-- Q6: Construction Quality -->
-                <div class="mat-wizard-question">
-                    <div class="mat-wizard-q-label">
-                        <span class="mat-wizard-q-num">6</span>
-                        <span>What is the desired construction quality / specification?</span>
-                    </div>
-                    <div class="mat-wizard-option-grid mat-wizard-option-grid-3" id="wizQualityGrid">
-                        <button class="mat-wizard-opt mat-wizard-opt-quality" onclick="selectWizardOption(this, 'wizQualityGrid', 'wizMatQuality')" data-value="Standard">
-                            <div class="mat-quality-icon">⭐</div>
-                            <div class="mat-quality-name">Standard</div>
-                            <div class="mat-quality-desc">M20 mix · 8% wastage · cost-effective build</div>
-                        </button>
-                        <button class="mat-wizard-opt mat-wizard-opt-quality" onclick="selectWizardOption(this, 'wizQualityGrid', 'wizMatQuality')" data-value="Premium">
-                            <div class="mat-quality-icon">⭐⭐</div>
-                            <div class="mat-quality-name">Premium</div>
-                            <div class="mat-quality-desc">M25 mix · 10% wastage · high-grade finishes</div>
-                        </button>
-                        <button class="mat-wizard-opt mat-wizard-opt-quality" onclick="selectWizardOption(this, 'wizQualityGrid', 'wizMatQuality')" data-value="Custom">
-                            <div class="mat-quality-icon">🛠️</div>
-                            <div class="mat-quality-name">Custom</div>
-                            <div class="mat-quality-desc">M30+ mix · 12% wastage · bespoke specs</div>
-                        </button>
-                    </div>
-                    <input type="hidden" id="wizMatQuality" value="">
-                </div>
+            </div>
 
-            </div><!-- end mat-wizard-form -->
-
-            <!-- Generate Button -->
             <div class="mat-wizard-footer">
-                <div class="mat-wizard-footer-hint">
-                    🔒 All AI processing runs locally via <strong>Ollama · Llama 3.2</strong> — no data leaves your device.
-                </div>
-                <button class="mat-wizard-submit-btn" id="matWizardSubmitBtn" onclick="submitMaterialWizard()">
+                <button type="button" class="mat-wizard-nav-btn" id="matWizardBackBtn" onclick="wizardBack()" disabled>← Back</button>
+                <div class="mat-wizard-footer-hint" id="matWizardFooterHint">Step 1 of 3 · Enter length, width and floor height</div>
+                <button type="button" class="mat-wizard-nav-btn mat-wizard-nav-btn-primary" id="matWizardNextBtn" onclick="wizardNext()">Next →</button>
+                <button type="button" class="mat-wizard-submit-btn" id="matWizardSubmitBtn" onclick="submitMaterialWizard()" style="display:none;">
                     <span class="mat-wizard-btn-icon">🚀</span>
-                    Generate Material Estimate
+                    Calculate AI Quantities &amp; Cost Breakdown
                 </button>
             </div>
 
@@ -383,15 +417,15 @@
     </div>
 
     <!-- AI MODULE SCRIPTS -->
-    <script src="ai/config.js?v=25.0"></script>
-    <script src="ai/utils.js?v=25.0"></script>
-    <script src="ai/prompt_manager.js?v=25.0"></script>
-    <script src="ai/ollama_client.js?v=25.0"></script>
-    <script src="ai/ai_service.js?v=25.0"></script>
+    <script src="ai/config.js?v=26.0"></script>
+    <script src="ai/utils.js?v=26.0"></script>
+    <script src="ai/prompt_manager.js?v=26.0"></script>
+    <script src="ai/ollama_client.js?v=26.0"></script>
+    <script src="ai/ai_service.js?v=26.0"></script>
 
     <!-- APP CORE SCRIPTS -->
-    <script src="js/data.js?v=25.0"></script>
-    <script src="js/main.js?v=25.0"></script>
+    <script src="js/data.js?v=26.0"></script>
+    <script src="js/main.js?v=26.0"></script>
 </body>
 
 </html>
