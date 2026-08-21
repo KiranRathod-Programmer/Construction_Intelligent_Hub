@@ -6,7 +6,36 @@
  * Primary Default Model: Llama 3.2 (llama3.2)
  */
 
+function containsConstructionContext(text) {
+    const keywords = [
+        "concrete", "rebar", "cement", "boq", "bill of quantities", "steel",
+        "contract", "site", "drawing", "specification", "labor", "excavation",
+        "foundation", "structural", "safety", "invoice", "vendor", "material", "cost"
+    ];
+    const lowerText = String(text || "").toLowerCase();
+    return keywords.some(keyword => lowerText.includes(keyword));
+}
+
 const CIH_AI_SERVICE = {
+    containsConstructionContext,
+    outOfScopeRefusal: () => (
+        (typeof CIH_OUT_OF_SCOPE_REFUSAL !== 'undefined')
+            ? CIH_OUT_OF_SCOPE_REFUSAL
+            : '⚠️ Out of Scope Request: I am specialized exclusively in civil engineering, construction management, material takeoffs, and site risk analysis. Please reframe your query around your project data or site logistics.'
+    ),
+
+    guardedSystem: (roleBlock) => (
+        typeof composeGuardedSystemPrompt === 'function'
+            ? composeGuardedSystemPrompt(roleBlock)
+            : String(roleBlock || '')
+    ),
+
+    refuseOutOfScope: (userMessage) => ({
+        userMessage: userMessage,
+        outOfScope: true,
+        rawText: CIH_AI_SERVICE.outOfScopeRefusal(),
+        html: AIUtils.formatMarkdownToHTML(CIH_AI_SERVICE.outOfScopeRefusal())
+    }),
     /**
      * File Validator for Document Uploads
      */
@@ -129,14 +158,14 @@ const CIH_AI_SERVICE = {
             projTitle = paramsOrProjectName || "Active Infrastructure Site";
         }
 
-        const systemPrompt = `You are CIH Material AI — a Senior Chartered Quantity Surveyor (MRICS) and Civil Cost Engineer for Construction Intelligent Hub.
+        const systemPrompt = CIH_AI_SERVICE.guardedSystem(`You are CIH Material AI — a Senior Chartered Quantity Surveyor (MRICS) and Civil Cost Engineer for Construction Intelligent Hub.
 
 ABSOLUTE RULES — NEVER VIOLATE:
 1. Replace EVERY [bracketed placeholder] with a real, calculated number. Zero placeholders allowed in output.
 2. Each material section must show: net quantity + wastage quantity = total, plus INR cost.
 3. Grand Total = arithmetic sum of all material subtotals. Show the number.
 4. Use Indian number formatting: ₹X,XX,XXX (lakhs notation).
-5. Executive Recommendations must be specific to the project parameters given — not generic advice.`;
+5. Executive Recommendations must be specific to the project parameters given — not generic advice.`);
 
         const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
         return {
@@ -170,7 +199,7 @@ ABSOLUTE RULES — NEVER VIOLATE:
         };
 
         const prompt = CIH_PROMPTS.budgetEstimation(p);
-        const systemPrompt = `You are CIH Financial AI, an expert civil engineering quantity surveyor and cost estimator for Construction Intelligent Hub. Evaluate project parameters and generate structured, accurate budget estimations.`;
+        const systemPrompt = CIH_AI_SERVICE.guardedSystem(`You are CIH Financial AI, an expert civil engineering quantity surveyor and cost estimator for Construction Intelligent Hub. Evaluate project parameters and generate structured, accurate budget estimations.`);
 
         const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
 
@@ -206,7 +235,7 @@ ABSOLUTE RULES — NEVER VIOLATE:
         const snap = liveSnap || snapshotData || { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, budget: 0, spent: 0, remainingBudget: 0, risks: [], expenses: [], materials: [] };
 
         const prompt = CIH_PROMPTS.riskAssessment(projectName, snap);
-        const systemPrompt = `You are CIH Risk AI, an expert civil engineering risk analyst for Construction Intelligent Hub. Evaluate project telemetry and generate clean, structured, executive risk analysis reports.`;
+        const systemPrompt = CIH_AI_SERVICE.guardedSystem(`You are CIH Risk AI, an expert civil engineering risk analyst for Construction Intelligent Hub. Evaluate project telemetry and generate clean, structured, executive risk analysis reports.`);
 
         const response = await OllamaClient.generate(prompt, systemPrompt, modelName);
 
@@ -270,9 +299,21 @@ ABSOLUTE RULES — NEVER VIOLATE:
             throw new Error("No document content provided for analysis. Upload a readable PDF/TXT/CSV/JSON/MD file first.");
         }
 
+        if (!containsConstructionContext(text)) {
+            const refusal = CIH_AI_SERVICE.outOfScopeRefusal();
+            return {
+                docTitle: title,
+                presetType: 'out-of-scope',
+                outOfScope: true,
+                prompt: '',
+                rawText: refusal,
+                html: refusal
+            };
+        }
+
         const detectedPreset = presetType || (typeof CIH_PROMPTS !== 'undefined' ? CIH_PROMPTS.detectDocumentPreset(title, text) : "general");
         const prompt = CIH_PROMPTS.documentAnalysis(title, text, detectedPreset);
-        const systemPrompt = `You are CIH Document Intelligence AI — a Senior Construction Contract Auditor and Chartered Cost Engineer. Analyze only the uploaded document text. Never invent facts, rates, parties, or clauses. If information is missing, write "Not specified in document". Output the exact markdown headings requested in the user prompt.`;
+        const systemPrompt = CIH_AI_SERVICE.guardedSystem(`You are CIH Document Intelligence AI — a Senior Construction Contract Auditor and Chartered Cost Engineer. Analyze only construction, site engineering, or project logistics documents. If the file is out of scope, reply with the exact mandatory refusal and nothing else. Never invent facts, rates, parties, or clauses. If information is missing, write "Not specified in document". Output the exact markdown headings requested in the user prompt.`);
 
         const activeModel = modelName || "llama3.2";
         const response = await OllamaClient.generate(prompt, systemPrompt, activeModel, true, {
@@ -300,13 +341,20 @@ ABSOLUTE RULES — NEVER VIOLATE:
     chatWithUploadedDocument: async (docContent, userQuestion, modelName = "llama3.2") => {
         const text = docContent || "Construction Agreement & BOQ Document Context";
         const q = userQuestion || "What is the penalty for delay?";
+        if (typeof isQueryInScope === 'function' && !isQueryInScope(q)) {
+            return CIH_AI_SERVICE.refuseOutOfScope(q);
+        }
 
-        const systemPrompt = `You are a Document AI Assistant powered by Llama 3.2. You must answer questions STRICTLY based on the provided document text below. If the answer cannot be found in the document, state clearly that the document does not mention it.
+        if (!containsConstructionContext(text)) {
+            return CIH_AI_SERVICE.refuseOutOfScope(q);
+        }
+
+        const systemPrompt = CIH_AI_SERVICE.guardedSystem(`You are a Document AI Assistant powered by Llama 3.2. You must answer questions STRICTLY based on the provided construction document text below. If the question is outside civil engineering / site logistics, use the mandatory refusal. If the answer cannot be found in the document, state clearly that the document does not mention it.
 
 DOCUMENT CONTENT:
 """
 ${text}
-"""`;
+"""`);
 
         const prompt = `User Question: "${q}"\n\nAnswer strictly from the document content provided. Keep response concise, accurate, and structured with bullet points.`;
 
@@ -364,7 +412,7 @@ ${text}
         };
 
         const prompt = CIH_PROMPTS.predictiveForecast(projectData);
-        const systemPrompt = `You are CIH Forecast AI, a Senior Construction Operations Analyst. Write a simple, owner-friendly project forecast using only the supplied project details. Do not invent numbers, dates, or project names. Do not use placeholders.`;
+        const systemPrompt = CIH_AI_SERVICE.guardedSystem(`You are CIH Forecast AI, a Senior Construction Operations Analyst. Write a simple, owner-friendly project forecast using only the supplied project details. Do not invent numbers, dates, or project names. Do not use placeholders.`);
         const activeModel = modelName || "llama3.2";
 
         const response = await OllamaClient.generate(prompt, systemPrompt, activeModel, true, {
@@ -396,6 +444,10 @@ ${text}
      * Global Chatbot AI Assistant (ChatGPT Style, Defaults to Llama 3.2)
      */
     chatWithAssistant: async (userMsg, history = [], modelName = "llama3.2") => {
+        if (typeof isQueryInScope === 'function' && !isQueryInScope(userMsg, history)) {
+            return CIH_AI_SERVICE.refuseOutOfScope(userMsg);
+        }
+
         const messages = history.map(h => ({
             role: h.role === 'user' ? 'user' : 'assistant',
             content: h.content

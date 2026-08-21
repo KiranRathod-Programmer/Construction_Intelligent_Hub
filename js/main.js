@@ -2560,6 +2560,42 @@ function initAIInsightsPage() {
     }
 }
 
+function getDocOutOfScopeWarning() {
+    return (typeof CIH_AI_SERVICE !== 'undefined' && typeof CIH_AI_SERVICE.outOfScopeRefusal === 'function')
+        ? CIH_AI_SERVICE.outOfScopeRefusal()
+        : '⚠️ Out of Scope Request: I am specialized exclusively in civil engineering, construction management, material takeoffs, and site risk analysis. Please reframe your query around your project data or site logistics.';
+}
+
+function renderDocOutOfScopeWarning(fileName) {
+    const warning = getDocOutOfScopeWarning();
+    const titleEl = document.getElementById('aiDocCurrentTitle');
+    const outputBox = document.getElementById('aiDocAnalysisOutput');
+    const textContentEl = document.getElementById('typewriterTextContent');
+    const badgeEl = document.getElementById('typewriterStatusBadge');
+    const actionRow = document.getElementById('aiDocActionRow');
+
+    if (titleEl && fileName) titleEl.textContent = fileName;
+    if (outputBox) outputBox.style.display = 'block';
+    if (badgeEl) badgeEl.innerText = '[STATUS: OUT OF SCOPE]';
+    if (textContentEl) textContentEl.textContent = warning;
+    if (actionRow) actionRow.style.display = 'none';
+
+    if (currentDocTypewriterInterval) {
+        clearInterval(currentDocTypewriterInterval);
+        currentDocTypewriterInterval = null;
+    }
+
+    currentDocAnalysisReportText = warning;
+    currentDocAnalysisData = { outOfScope: true, rawText: warning };
+}
+
+function setDocActionRowVisible(visible) {
+    const actionRow = document.getElementById('aiDocActionRow');
+    if (actionRow) actionRow.style.display = visible ? 'flex' : 'none';
+}
+
+let currentDocTypewriterInterval = null;
+
 /**
  * FEATURE 1: DOCUMENT ANALYZER CONTROLLERS
  */
@@ -2586,6 +2622,19 @@ async function handleDocFileUpload(event) {
         if (!extractedText || String(extractedText).trim().length < 40) {
             throw new Error("Extracted text is empty or too short. Use a text-based PDF or TXT/CSV/JSON/MD file.");
         }
+
+        if (typeof containsConstructionContext === 'function' && !containsConstructionContext(extractedText)) {
+            currentUploadedDocContent = null;
+            currentUploadedDocTitle = null;
+            currentUploadedDocPreset = null;
+            currentDocAnalysisReportText = null;
+            currentDocAnalysisData = null;
+            updateDocGenerateButtonState(false);
+            renderDocOutOfScopeWarning(file.name);
+            event.target.value = '';
+            return;
+        }
+
         currentUploadedDocContent = extractedText;
         currentUploadedDocPreset = (typeof CIH_PROMPTS !== 'undefined')
             ? CIH_PROMPTS.detectDocumentPreset(file.name, extractedText)
@@ -2692,8 +2741,6 @@ Quality Verification: Batch test certificate attached & ISO-9001 certified.`;
     updateDocGenerateButtonState(true);
 }
 
-let currentDocTypewriterInterval = null;
-
 async function triggerDocSummaryAndRecommendations() {
     // 1. Upload Gating Rule: Verify valid document exists
     if (!currentUploadedDocContent || !currentUploadedDocContent.trim()) {
@@ -2705,6 +2752,12 @@ async function triggerDocSummaryAndRecommendations() {
         return;
     }
 
+    if (typeof containsConstructionContext === 'function' && !containsConstructionContext(currentUploadedDocContent)) {
+        renderDocOutOfScopeWarning(currentUploadedDocTitle);
+        updateDocGenerateButtonState(true);
+        return;
+    }
+
     const outputBox = document.getElementById('aiDocAnalysisOutput');
     const textContentEl = document.getElementById('typewriterTextContent');
     const badgeEl = document.getElementById('typewriterStatusBadge');
@@ -2712,6 +2765,7 @@ async function triggerDocSummaryAndRecommendations() {
 
     if (!outputBox || !textContentEl) return;
 
+    setDocActionRowVisible(true);
     outputBox.style.display = 'block';
     setTimeout(() => {
         outputBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -2739,8 +2793,15 @@ async function triggerDocSummaryAndRecommendations() {
             currentUploadedDocPreset
         );
 
+        if (res.outOfScope) {
+            renderDocOutOfScopeWarning(currentUploadedDocTitle);
+            updateDocGenerateButtonState(true);
+            return;
+        }
+
         currentDocAnalysisReportText = res.rawText;
         currentDocAnalysisData = res;
+        setDocActionRowVisible(true);
 
         if (currentDocTypewriterInterval) {
             clearInterval(currentDocTypewriterInterval);
@@ -2780,7 +2841,7 @@ function runDocumentAnalysis() {
  * DOWNLOAD, EXPORT PDF & COPY HANDLERS FOR DOCUMENT AI
  */
 function downloadDocAISummary() {
-    if (!currentDocAnalysisReportText) {
+    if (!currentDocAnalysisReportText || (currentDocAnalysisData && currentDocAnalysisData.outOfScope)) {
         alert("Please generate an AI executive summary first before downloading.");
         return;
     }

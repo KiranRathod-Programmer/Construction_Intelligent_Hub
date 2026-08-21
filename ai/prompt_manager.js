@@ -1,10 +1,168 @@
 /**
  * Construction Intelligent Hub (CIH) - Reusable AI Prompt Templates
- * 
+ *
  * Centralized registry of system & user prompt templates.
- * Supports ChatGPT-style natural conversation, general civil engineering explanations,
- * project-specific data reasoning, and dynamic context injection.
+ * Loaded as a classic browser script (not an ES module), so the guardrail
+ * is a global constant rather than `export const`.
  */
+
+const CIH_OUT_OF_SCOPE_REFUSAL = '⚠️ Out of Scope Request: I am specialized exclusively in civil engineering, construction management, material takeoffs, and site risk analysis. Please reframe your query around your project data or site logistics.';
+
+const SYSTEM_GUARDRAIL_PROMPT = `
+YOU ARE THE AI BRAIN OF "CONSTRUCTION INTELLIGENT HUB" (CIH).
+YOUR SOLE PURPOSE IS TO ASSIST WITH CIVIL ENGINEERING, SITE SAFETY, MATERIAL ESTIMATION, RISK ANALYSIS, BUDGET FORECASTING, AND CONSTRUCTION PROJECT LOGISTICS.
+
+STRICT OPERATIONAL DIRECTIVES:
+1. TOPIC BOUNDARY:
+   - ALLOWED: Construction site management, material takeoffs (concrete, rebar, brickwork, sand), site risk scoring, budget variance, vendor logs, structural safety, equipment logistics, civil engineering codes, project schedules.
+   - DENIED: General knowledge, coding outside construction software, sports, politics, history, pop culture, creative writing, recipe advice, general conversational chitchat.
+
+2. MANDATORY REFUSAL PROTOCOL:
+   If the user query or uploaded file content is OUT OF SCOPE, you MUST IMMEDIATELY respond with this EXACT structure and nothing else:
+   "⚠️ Out of Scope Request: I am specialized exclusively in civil engineering, construction management, material takeoffs, and site risk analysis. Please reframe your query around your project data or site logistics."
+
+3. CONTEXT COMPLIANCE:
+   When project context JSON or document text is provided, base your analysis strictly on that data. Do not invent fictitious site metrics, non-existent project costs, or unverified structural specs.
+`;
+
+const CIH_SCOPE_ALLOW_TERMS = [
+    'civil', 'construction', 'infrastructure', 'site', 'jobsite', 'job site',
+    'engineering', 'structural', 'geotechnical', 'foundation', 'excavation',
+    'concrete', 'rebar', 'reinforcement', 'tmt', 'steel', 'cement', 'brick',
+    'brickwork', 'sand', 'aggregate', 'bitumen', 'asphalt', 'formwork',
+    'shuttering', 'scaffolding', 'waterproofing', 'mix design', 'rcc', 'm25', 'm40',
+    'beam', 'column', 'slab', 'pile', 'pier', 'viaduct', 'metro', 'highway',
+    'airport', 'runway', 'bridge', 'tunnel', 'building', 'facade', 'mep', 'hvac',
+    'material', 'takeoff', 'take-off', 'boq', 'bill of quantities', 'quantity survey',
+    'dpr', 'progress report', 'manpower', 'workforce', 'labor', 'labour',
+    'budget', 'variance', 'overrun', 'forecast', 'cashflow', 'contingency',
+    'vendor', 'supplier', 'procurement', 'inventory', 'stock', 'logistics',
+    'risk', 'mitigation', 'safety', 'osha', 'hazard', 'incident',
+    'equipment', 'crane', 'excavator', 'telemetry', 'rfid', 'schedule',
+    'milestone', 'deadline', 'delay', 'liquidated', 'tender', 'contract',
+    'subcontractor', 'contractor', 'epc', 'invoice', 'gst', 'clause',
+    'project', 'portfolio', 'client', 'sow', 'scope of work', 'is 456', 'is 1786',
+    'primavera', 'ms project', 'revit', 'autocad', 'bim', 'staad', 'etabs'
+];
+
+const CIH_SCOPE_DENY_TERMS = [
+    'cricket', 'football', 'soccer', 'nba', 'ipl', 'tennis', 'hockey', 'fifa',
+    'world cup', 'olympics', 'sports', 'match score', 'movie', 'netflix',
+    'bollywood', 'hollywood', 'celebrity', 'pop culture', 'song lyrics',
+    'album', 'anime', 'video game', 'playstation', 'election', 'politics',
+    'president', 'prime minister', 'political party', 'recipe', 'cookbook',
+    'cooking', 'baking', 'joke', 'riddle', 'poem', 'lyrics', 'short story',
+    'horoscope', 'astrology', 'dating advice', 'gossip'
+];
+
+const CIH_SCOPE_CODE_TERMS = [
+    'python', 'javascript', 'typescript', 'java ', 'c++', 'html', 'css',
+    'react', 'node.js', 'golang', 'ruby on rails', 'write a script',
+    'write code', 'programming', 'leetcode', 'debug this'
+];
+
+function cihEscapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function cihCountTermHits(text, terms) {
+    const source = String(text || '');
+    return terms.filter((term) => {
+        const pattern = new RegExp(`(?:^|[^a-z0-9])${cihEscapeRegExp(term)}(?:[^a-z0-9]|$)`, 'i');
+        return pattern.test(source);
+    });
+}
+
+function cihProjectNameHits(text) {
+    if (typeof CIH_DATASET === 'undefined' || !Array.isArray(CIH_DATASET.projects)) return [];
+    const lower = String(text || '').toLowerCase();
+    return CIH_DATASET.projects.filter((p) => {
+        const title = String(p.title || '').toLowerCase();
+        const id = String(p.id || '').toLowerCase();
+        const city = String(p.city || '').toLowerCase();
+        return (title && lower.includes(title)) || (id && lower.includes(id)) || (city && lower.includes(city) && /project|site|budget|risk|material/.test(lower));
+    });
+}
+
+function cihHasConstructionDomain(text) {
+    return cihCountTermHits(text, CIH_SCOPE_ALLOW_TERMS).length > 0 || cihProjectNameHits(text).length > 0;
+}
+
+function cihIsInternalConstructionTask(text) {
+    const lower = String(text || '').toLowerCase();
+    return lower.includes('you are the ai brain of "construction intelligent hub"')
+        || lower.includes('cih material ai')
+        || lower.includes('material estimation report')
+        || lower.includes('document intelligence report')
+        || lower.includes('construction risk analysis report')
+        || lower.includes('project budget estimation report')
+        || lower.includes('real-time application context dataset')
+        || lower.includes('senior construction operations analyst');
+}
+
+function composeGuardedSystemPrompt(roleBlock) {
+    const extra = String(roleBlock || '').trim();
+    if (extra.includes('YOUR SOLE PURPOSE IS TO ASSIST WITH CIVIL ENGINEERING')) {
+        return extra;
+    }
+    return `${SYSTEM_GUARDRAIL_PROMPT.trim()}\n\n${extra}`.trim();
+}
+
+function isQueryInScope(text, history) {
+    const query = String(text || '').trim();
+    if (!query) return false;
+    if (cihIsInternalConstructionTask(query)) return true;
+
+    const allowHits = cihCountTermHits(query, CIH_SCOPE_ALLOW_TERMS);
+    const denyHits = cihCountTermHits(query, CIH_SCOPE_DENY_TERMS);
+    const codeHits = cihCountTermHits(query, CIH_SCOPE_CODE_TERMS);
+    const projectHits = cihProjectNameHits(query);
+    const constructionDomain = allowHits.length > 0 || projectHits.length > 0;
+
+    if (denyHits.length > 0 && !constructionDomain) return false;
+    if (denyHits.length > 0 && constructionDomain && denyHits.length >= allowHits.length && projectHits.length === 0) {
+        return false;
+    }
+    if (codeHits.length > 0 && !constructionDomain) return false;
+    if (constructionDomain) return true;
+
+    const prior = Array.isArray(history) ? history : [];
+    const priorInScope = prior.some((turn) => cihHasConstructionDomain(turn && (turn.content || turn)));
+    const wordCount = query.split(/\s+/).filter(Boolean).length;
+    if (priorInScope && wordCount <= 10 && denyHits.length === 0 && codeHits.length === 0) {
+        return true;
+    }
+    return false;
+}
+
+function evaluateConstructionDocument(docTitle, docContent) {
+    const title = String(docTitle || '');
+    const content = String(docContent || '').trim();
+    const combined = `${title}\n${content}`;
+    if (!content || content.length < 40) {
+        return { valid: false, inScope: false, message: CIH_OUT_OF_SCOPE_REFUSAL };
+    }
+
+    const preset = (typeof CIH_PROMPTS !== 'undefined' && typeof CIH_PROMPTS.detectDocumentPreset === 'function')
+        ? CIH_PROMPTS.detectDocumentPreset(title, content)
+        : 'general';
+    const allowHits = cihCountTermHits(combined, CIH_SCOPE_ALLOW_TERMS);
+    const denyHits = cihCountTermHits(combined, CIH_SCOPE_DENY_TERMS);
+    const uniqueAllow = [...new Set(allowHits.map((t) => t.toLowerCase()))];
+
+    if (denyHits.length >= 2 && uniqueAllow.length < 2) {
+        return { valid: false, inScope: false, message: CIH_OUT_OF_SCOPE_REFUSAL };
+    }
+
+    const strongConstructionPreset = preset === 'boq' || preset === 'dpr';
+    const contractOrInvoice = preset === 'contract' || preset === 'invoice';
+    const enoughDomain = uniqueAllow.length >= 3 || strongConstructionPreset || (contractOrInvoice && uniqueAllow.length >= 2);
+
+    if (!enoughDomain) {
+        return { valid: false, inScope: false, message: CIH_OUT_OF_SCOPE_REFUSAL };
+    }
+    return { valid: true, inScope: true, preset: preset, hits: uniqueAllow };
+}
 
 const CIH_PROMPTS = {
     /**
@@ -85,20 +243,21 @@ ${reports}`;
     },
 
     /**
-     * ChatGPT-Style Conversational Assistant System Prompt
+     * Guarded conversational system prompt — construction expert only
      */
     get systemPrompt() {
-        return `You are CIH Assistant, a highly intelligent conversational AI for the Construction Intelligent Hub platform (similar to ChatGPT).
+        return composeGuardedSystemPrompt(`You are CIH Assistant, the Construction Intelligent Hub civil engineering and construction-management expert (llama3.2).
 
 BEHAVIORAL GUIDELINES:
-1. NATURAL CONVERSATION: Be helpful, articulate, and natural. Explain civil engineering, construction management, financial, and structural concepts clearly and thoroughly.
-2. GENERAL KNOWLEDGE: If the user asks a general construction question (e.g. "What is reinforced concrete?", "How can I reduce construction cost?", "Explain budget utilization", "What is an RFID sensor?"), provide a comprehensive, practical, expert explanation.
-3. PROJECT ANALYSIS: If the user asks about specific projects in the system (e.g. "Why is my project delayed?", "What is the budget for Delhi Metro?", "Which equipment needs maintenance?"), analyze the real-time project dataset below and explain the exact reasons clearly.
-4. ACCURACY & INTEGRITY: If the user asks about a project or data point that is NOT present in the dataset below, clearly state that the information is unavailable in the active workspace instead of inventing fake data.
-5. FOLLOW-UP CONTEXT: Maintain continuity with previous conversation turns so follow-up questions feel smooth and intuitive.
-6. FORMATTING: Use clean markdown headers, bullet points, and bold text for readability.
+1. STAY IN DOMAIN: Answer only civil engineering, site safety, materials, risk, budget, equipment, contracts, and project-logistics questions.
+2. CONSTRUCTION EXPLANATIONS: If the user asks a construction question (e.g. "What is reinforced concrete?", "How can I reduce construction cost?", "Explain budget utilization"), provide a practical expert explanation.
+3. PROJECT ANALYSIS: If the user asks about projects in the live dataset, analyze that dataset only and do not invent missing figures.
+4. ACCURACY: If a requested project or metric is not in the dataset, say it is unavailable in the active workspace.
+5. FOLLOW-UP: Maintain continuity only for in-scope construction threads.
+6. FORMATTING: Use clean markdown headers, bullet points, and bold text.
+7. OUT OF SCOPE: If the query is sports, politics, pop culture, general coding, entertainment, recipes, or chitchat, reply with the exact mandatory refusal and nothing else.
 
-${CIH_PROMPTS.getLiveWebappContext()}`;
+${CIH_PROMPTS.getLiveWebappContext()}`);
     },
 
     materialEstimation: (params, legacySpecs = "") => {
@@ -413,7 +572,13 @@ FORMAT YOUR RESPONSE IN THE FOLLOWING STRUCTURE:
         };
         const typeHint = typeHints[detectedType.toLowerCase()] || typeHints.general;
 
-        return `You are CIH Document Intelligence AI — a Senior Construction Contract Auditor and Chartered Cost Engineer.
+        return `${SYSTEM_GUARDRAIL_PROMPT}
+
+You are CIH Document Intelligence AI — a Senior Construction Contract Auditor and Chartered Cost Engineer.
+
+GUARDRAIL FOR UPLOADED FILES:
+If the document text is NOT valid construction, site engineering, civil works, BOQ/DPR, contractor logistics, or project commercial data, respond with ONLY this exact sentence and stop:
+${CIH_OUT_OF_SCOPE_REFUSAL}
 
 TASK:
 Analyze ONLY the uploaded document text below. Generate a structured executive intelligence report. Every fact, number, date, party, quantity, and clause MUST come from the document. Do not invent data, typical industry values, or missing clauses.
@@ -519,3 +684,9 @@ Rules:
 - Base the forecast only on the project details above. Do not invent project names, dates, or budget figures that are not listed.`;
     }
 };
+
+CIH_PROMPTS.SYSTEM_GUARDRAIL_PROMPT = SYSTEM_GUARDRAIL_PROMPT;
+CIH_PROMPTS.OUT_OF_SCOPE_REFUSAL = CIH_OUT_OF_SCOPE_REFUSAL;
+CIH_PROMPTS.composeGuardedSystemPrompt = composeGuardedSystemPrompt;
+CIH_PROMPTS.isQueryInScope = isQueryInScope;
+CIH_PROMPTS.evaluateConstructionDocument = evaluateConstructionDocument;

@@ -7,6 +7,30 @@
  */
 
 const OllamaClient = {
+    _guardedSystem: (systemPrompt) => {
+        const fallback = (typeof CIH_PROMPTS !== 'undefined') ? CIH_PROMPTS.systemPrompt : '';
+        const raw = systemPrompt || fallback;
+        if (typeof composeGuardedSystemPrompt === 'function') {
+            return composeGuardedSystemPrompt(raw);
+        }
+        return raw;
+    },
+
+    _refusalText: () => (
+        (typeof CIH_OUT_OF_SCOPE_REFUSAL !== 'undefined')
+            ? CIH_OUT_OF_SCOPE_REFUSAL
+            : '⚠️ Out of Scope Request: I am specialized exclusively in civil engineering, construction management, material takeoffs, and site risk analysis. Please reframe your query around your project data or site logistics.'
+    ),
+
+    _mustRefuse: (text, history) => {
+        if (typeof cihIsInternalConstructionTask === 'function' && cihIsInternalConstructionTask(text)) {
+            return false;
+        }
+        if (typeof isQueryInScope === 'function') {
+            return !isQueryInScope(text, history);
+        }
+        return false;
+    },
     /**
      * Get active Ollama daemon base URL endpoint
      */
@@ -52,6 +76,10 @@ const OllamaClient = {
      * Defaults to Llama 3.2 (llama3.2)
      */
     generate: async (prompt, systemPrompt = "", modelName = "", ollamaOnly = false, extraOptions = null) => {
+        if (OllamaClient._mustRefuse(prompt)) {
+            return OllamaClient._refusalText();
+        }
+
         const endpoint = OllamaClient.getEndpoint();
         const activeModel = modelName || OllamaClient.getDefaultModel();
         const isHealthy = await OllamaClient.checkHealth(endpoint);
@@ -80,7 +108,7 @@ const OllamaClient = {
             const payload = {
                 model: activeModel,
                 prompt: prompt,
-                system: systemPrompt || CIH_PROMPTS.systemPrompt,
+                system: OllamaClient._guardedSystem(systemPrompt),
                 stream: false,
                 options: options
             };
@@ -120,13 +148,23 @@ const OllamaClient = {
         const endpoint = OllamaClient.getEndpoint();
         const activeModel = modelName || OllamaClient.getDefaultModel();
         const queryText = originalUserMsg || (messages.length ? messages[messages.length - 1].content : "");
+        if (OllamaClient._mustRefuse(queryText, messages)) {
+            return OllamaClient._refusalText();
+        }
+
         const isHealthy = await OllamaClient.checkHealth(endpoint);
 
-        const fullMessages = [...messages];
+        const fullMessages = messages.map((m) => ({ role: m.role, content: m.content }));
         if (!fullMessages.some(m => m.role === 'system')) {
             fullMessages.unshift({
                 role: 'system',
-                content: systemOverride || CIH_PROMPTS.systemPrompt
+                content: OllamaClient._guardedSystem(systemOverride)
+            });
+        } else {
+            fullMessages.forEach((m) => {
+                if (m.role === 'system') {
+                    m.content = OllamaClient._guardedSystem(m.content);
+                }
             });
         }
 
@@ -173,6 +211,10 @@ const OllamaClient = {
      * Dynamic & Conversational Local Fallback Knowledge Engine when Ollama is offline (Llama 3.2 heuristic mode)
      */
     _getOfflineFallbackResponse: (prompt, history = []) => {
+        if (OllamaClient._mustRefuse(prompt, history)) {
+            return OllamaClient._refusalText();
+        }
+
         const lower = (prompt || "").toLowerCase().trim();
         const dataset = (typeof CIH_DATASET !== 'undefined') ? CIH_DATASET : null;
 
@@ -440,12 +482,16 @@ ${projMat.length ? projMat.map(m => `- **${m.itemName}**: ${m.quantityInStock} $
 ${projRisk.length ? `#### ⚠️ Risk Logs:\n${projRisk.map(r => `- **${r.riskTitle}** (${r.category}): severity ${r.severityScore}, status ${r.status}. Mitigation: ${r.mitigationPlan}`).join('\n')}` : ''}`;
         }
 
-        // 6. DEFAULT CONVERSATIONAL RESPONSE
-        return `### 🤖 CIH Assistant (Llama 3.2)
-I understand you are asking about: **"${prompt}"**.
+        // 6. DEFAULT IN-SCOPE CONSTRUCTION RESPONSE
+        return `### 🏗️ CIH Construction Assistant
+I can only help with **civil engineering, site logistics, material takeoffs, risk, budget, and project data** in this workspace.
 
-I have live awareness of **${projects.length} active project(s)** in this workspace: ${projects.map(p => p.title).join(', ') || 'none loaded'}.
+Live portfolio: **${projects.length} project(s)** — ${projects.map(p => p.title).join(', ') || 'none loaded'}.
 
-How can I assist you further with project analysis, material recommendations, or budget optimization?`;
+Ask a specific question such as:
+- Budget spend vs remaining for a named project
+- Open risks and mitigation owners
+- Material stock vs requirement
+- Equipment health or maintenance due`;
     }
 };
