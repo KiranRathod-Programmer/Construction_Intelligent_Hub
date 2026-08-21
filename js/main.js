@@ -4,18 +4,35 @@
  */
 
 // Initialize Page Content on DOM Load
+function refreshLiveDatasetViews() {
+    if (refreshLiveDatasetViews._busy) return;
+    refreshLiveDatasetViews._busy = true;
+    try {
+        populateAllProjectSelects();
+        syncGlobalProfileUI();
+        initLandingPage();
+        initDashboardPage();
+        initProjectManagementPage();
+        initTeamManagementPage();
+        initBudgetPage();
+        initMaterialsPage();
+        initEquipmentPage();
+        initReportsPage();
+        initRiskAnalysisPage();
+    } finally {
+        refreshLiveDatasetViews._busy = false;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    populateAllProjectSelects();
-    syncGlobalProfileUI();
-    initLandingPage();
-    initDashboardPage();
-    initProjectManagementPage();
-    initTeamManagementPage();
-    initBudgetPage();
-    initMaterialsPage();
-    initReportsPage();
-    initRiskAnalysisPage();
+    refreshLiveDatasetViews();
+    initBudgetAiPanel();
+    resetRiskAiOutput();
     initAIInsightsPage();
+});
+
+window.addEventListener('cihDataUpdated', () => {
+    refreshLiveDatasetViews();
 });
 
 function getProjectBySelection(value) {
@@ -302,7 +319,10 @@ function renderProjectGrid(projectsList) {
 function handleOpenProject(projectId) {
     if (typeof CIH_DATASET === 'undefined' || !CIH_DATASET.projects) return;
 
-    const project = CIH_DATASET.projects.find(p => p.id === projectId);
+    const snapshot = typeof getProjectSnapshot === 'function'
+        ? getProjectSnapshot(projectId)
+        : (CIH_DATASET.getProjectSnapshot && CIH_DATASET.getProjectSnapshot(projectId));
+    const project = snapshot || CIH_DATASET.projects.find(p => p.id === projectId);
     if (!project) {
         alert('Project workspace details not found.');
         return;
@@ -329,6 +349,7 @@ function handleOpenProject(projectId) {
                 <div class="detail-metric-card">
                     <div class="detail-metric-label">TOTAL BUDGET</div>
                     <div class="detail-metric-val" style="color: #1D4ED8;">${project.formattedBudget || money(project.budget)}</div>
+                    <div style="font-size:11px;color:#64748B;margin-top:4px;">Spent ${project.formattedSpent || money(project.spent)} · Remaining ${project.formattedRemaining || money(project.remainingBudget)}</div>
                 </div>
                 <div class="detail-metric-card">
                     <div class="detail-metric-label">TARGET DEADLINE</div>
@@ -361,15 +382,17 @@ function handleOpenProject(projectId) {
                     📡 Active Site Materials & RFID Telemetry
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${(CIH_DATASET.rfidFeed || []).filter(mat => !mat.location || mat.location === project.title).map(mat => `
+                    ${(project.materials || []).map(mat => {
+                        const st = typeof cihMaterialStatus === 'function' ? cihMaterialStatus(mat) : { status: 'In Stock', statusClass: 'on-track' };
+                        return `
                         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px;">
                             <div>
-                                <strong>${mat.id}</strong> &mdash; ${mat.description}
-                                <div style="font-size: 11px; color: #64748B;">📍 ${mat.location}</div>
+                                <strong>${mat.id}</strong> &mdash; ${mat.itemName || mat.description}
+                                <div style="font-size: 11px; color: #64748B;">📍 ${project.title} · ${mat.quantityInStock} / ${mat.quantityRequired} ${mat.unit || ''}</div>
                             </div>
-                            <span style="font-weight: 700; color: ${mat.statusClass === 'green' ? '#10B981' : '#F59E0B'};">${mat.status}</span>
-                        </div>
-                    `).join('')}
+                            <span style="font-weight: 700; color: ${st.statusClass === 'on-track' ? '#10B981' : '#F59E0B'};">${st.status}</span>
+                        </div>`;
+                    }).join('') || '<div style="font-size:12px;color:#64748B;">No materials linked to this project.</div>'}
                 </div>
             </div>
 
@@ -753,7 +776,12 @@ function initBudgetPage() {
     const budgetGrid = document.getElementById('expenseTableBody');
     if (budgetGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.expenses) {
         renderBudgetKpis();
-        renderBudgetGrid(CIH_DATASET.expenses);
+        const projSelect = document.getElementById('budgetProjectFilter');
+        if (projSelect && projSelect.value && projSelect.value !== 'all') {
+            filterBudgetByProject();
+        } else {
+            renderBudgetGrid(CIH_DATASET.expenses);
+        }
     }
 }
 
@@ -849,7 +877,11 @@ function initMaterialsPage() {
     const matGrid = document.getElementById('materialsGrid');
     if (matGrid && typeof CIH_DATASET !== 'undefined' && CIH_DATASET.materials) {
         renderMaterialKpis();
-        renderMaterialsGrid(CIH_DATASET.materials);
+        if (typeof filterMaterials === 'function' && document.getElementById('materialProjectFilter')) {
+            filterMaterials();
+        } else {
+            renderMaterialsGrid(CIH_DATASET.materials);
+        }
     }
 }
 
@@ -2169,8 +2201,7 @@ function downloadMaterialEstimateCSV() {
 // ==========================================================================
 let currentBudgetEstimationData = null;
 
-function initBudgetPage() {
-    renderExpenseTable();
+function initBudgetAiPanel() {
     const outputBox = document.getElementById('aiBudgetEstimateOutput');
     const statusBadge = document.getElementById('budgetStatusBadge');
     if (outputBox) outputBox.style.display = 'none';
@@ -2277,11 +2308,14 @@ let currentRiskAISummary = `### ⚠️ AI Project Risk Evaluation (Llama 3.2 Loc
 3. Audit secondary structural steel supplier lead times.`;
 
 function initRiskAnalysisPage() {
+    renderRiskRegister();
+}
+
+function resetRiskAiOutput() {
     const outputBox = document.getElementById('aiRiskOutputBox');
     const statusBadge = document.getElementById('riskStatusBadge');
     if (outputBox) outputBox.style.display = 'none';
     if (statusBadge) statusBadge.style.display = 'none';
-    renderRiskRegister();
 }
 
 function renderRiskRegister() {

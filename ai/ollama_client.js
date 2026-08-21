@@ -116,18 +116,17 @@ const OllamaClient = {
      * Send message history to Ollama /api/chat endpoint
      * Defaults to Llama 3.2 (llama3.2)
      */
-    chat: async (messages, originalUserMsg = "", modelName = "") => {
+    chat: async (messages, originalUserMsg = "", modelName = "", systemOverride = "") => {
         const endpoint = OllamaClient.getEndpoint();
         const activeModel = modelName || OllamaClient.getDefaultModel();
         const queryText = originalUserMsg || (messages.length ? messages[messages.length - 1].content : "");
         const isHealthy = await OllamaClient.checkHealth(endpoint);
 
-        // Inject System Prompt at the beginning if not already present
         const fullMessages = [...messages];
         if (!fullMessages.some(m => m.role === 'system')) {
             fullMessages.unshift({
                 role: 'system',
-                content: CIH_PROMPTS.systemPrompt
+                content: systemOverride || CIH_PROMPTS.systemPrompt
             });
         }
 

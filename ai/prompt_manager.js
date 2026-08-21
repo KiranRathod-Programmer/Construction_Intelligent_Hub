@@ -17,9 +17,14 @@ const CIH_PROMPTS = {
         const titleOf = (id) => (typeof cihProjectTitle === 'function' ? cihProjectTitle(id) : id);
         const matStatus = (m) => (typeof cihMaterialStatus === 'function' ? cihMaterialStatus(m).status : '');
 
-        const projects = (CIH_DATASET.projects || []).map(p =>
-            `- Project: "${p.title}" (ID: ${p.id}) | Client: ${p.client || '—'} | Location: ${p.city} | Status: ${p.status} | Budget: ${p.formattedBudget || fmt(p.budget)} | Spent: ${p.formattedSpent || fmt(p.spent)} (${p.spentPercent || 0}%) | Deadline: ${p.formattedDeadline || p.deadline} | Progress: ${p.progressPercent}% | Risk Level: ${p.riskLevel || 'Low'} | Team Size: ${p.totalTeamCount}`
-        ).join('\n');
+        const snapOf = (id) => (typeof getProjectSnapshot === 'function'
+            ? getProjectSnapshot(id)
+            : (CIH_DATASET.getProjectSnapshot && CIH_DATASET.getProjectSnapshot(id)));
+
+        const projects = (CIH_DATASET.projects || []).map(p => {
+            const snap = snapOf(p.id) || p;
+            return `- Project: "${snap.title}" (ID: ${snap.id}) | Client: ${snap.client || '—'} | Location: ${snap.city} | Status: ${snap.status} | Budget: ${snap.formattedBudget || fmt(snap.budget)} | Spent: ${snap.formattedSpent || fmt(snap.spent)} (${snap.spentPercent || 0}%) | Remaining: ${snap.formattedRemaining || fmt(snap.remainingBudget)} | Deadline: ${snap.deadline || p.deadline} | Progress: ${snap.progressPercent}% | Risk Level: ${snap.riskLevel || 'Low'} | Open Risks: ${(snap.risks || []).length} | Materials: ${(snap.materials || []).length} | Expenses: ${(snap.expenses || []).length} | Team Size: ${snap.teamCount || p.totalTeamCount}`;
+        }).join('\n');
 
         const stats = CIH_DATASET.dashboardStats || {};
         const budget = CIH_DATASET.budgetOverview || {};
@@ -245,10 +250,30 @@ IMPORTANT RULES:
     quantitySurveying: (params) => CIH_PROMPTS.materialEstimation(params),
 
     budgetAnalysis: (projectName, totalBudget, spent, categoryList) => {
-        return `Project: ${projectName || "Active Infrastructure Portfolio"}
-Total Allocated Budget: ${totalBudget || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.totalPortfolioBudget) || "Not specified")}
-Current Spend: ${spent || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.totalSpent) || "Not specified")}
-Breakdown Categories: ${JSON.stringify(categoryList || [])}
+        const snap = (typeof getProjectSnapshot === 'function')
+            ? getProjectSnapshot(projectName)
+            : ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.getProjectSnapshot)
+                ? CIH_DATASET.getProjectSnapshot(projectName)
+                : null);
+        const fmt = (n) => (typeof cihFormatMoney === 'function' ? cihFormatMoney(n) : n);
+        const allocated = totalBudget
+            || (snap && (snap.formattedBudget || fmt(snap.budget)))
+            || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.totalPortfolioBudget) || "Not specified");
+        const currentSpend = spent
+            || (snap && (snap.formattedSpent || fmt(snap.spent)))
+            || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.totalSpent) || "Not specified");
+        const remaining = (snap && (snap.formattedRemaining || fmt(snap.remainingBudget)))
+            || ((typeof CIH_DATASET !== 'undefined' && CIH_DATASET.budgetOverview && CIH_DATASET.budgetOverview.remainingBudget) || "Not specified");
+        const cats = categoryList && categoryList.length
+            ? categoryList
+            : ((snap && snap.expenses) ? [...new Set(snap.expenses.map((e) => e.category).filter(Boolean))] : []);
+
+        return `Project: ${projectName || (snap && snap.title) || "Active Infrastructure Portfolio"}
+Total Allocated Budget: ${allocated}
+Current Spend: ${currentSpend}
+Remaining Budget: ${remaining}
+Breakdown Categories: ${JSON.stringify(cats)}
+Live Expense Lines: ${JSON.stringify((snap && snap.expenses) || [], null, 2)}
 
 Tasks:
 1. Analyze current project spending velocity.
@@ -451,9 +476,10 @@ List only risks supported by the uploaded text.]
         const progress = (p.progressPercent !== undefined && p.progressPercent !== null) ? p.progressPercent : "N/A";
         const deadline = p.deadline || "Not specified";
         const budget = p.formattedBudget || p.budget || "Not specified";
+        const remaining = p.formattedRemaining || p.remainingBudget || "Not specified";
         const status = p.status || "Not specified";
         const riskLevel = p.riskLevel || p.suggestedRiskLevel || "Not specified";
-        const spent = (p.spentPercent !== undefined && p.spentPercent !== null) ? `${p.spentPercent}%` : "Not specified";
+        const spent = (p.spentPercent !== undefined && p.spentPercent !== null) ? `${p.spentPercent}%` : (p.formattedSpent || p.spent || "Not specified");
         const teamCount = (p.teamCount !== undefined && p.teamCount !== null) ? p.teamCount : "Not specified";
         const lowStock = (p.lowStockMaterialsCount !== undefined && p.lowStockMaterialsCount !== null) ? p.lowStockMaterialsCount : "Not specified";
 
@@ -465,6 +491,7 @@ Project Details:
 - Progress: ${progress}%
 - Target Completion Date: ${deadline}
 - Total Budget: ${budget}
+- Remaining Budget: ${remaining}
 - Current Status: ${status}
 - Risk Level: ${riskLevel}
 - Budget Spent So Far: ${spent}

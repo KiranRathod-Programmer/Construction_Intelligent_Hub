@@ -198,7 +198,12 @@ ABSOLUTE RULES — NEVER VIOLATE:
      * Risk Analysis AI: Dynamic Llama 3.2 Risk Report & Mitigation Plan Generator (Defaults to Llama 3.2)
      */
     evaluateRisk: async (projectName, snapshotData, modelName = "llama3.2") => {
-        const snap = snapshotData || (typeof CIH_DATASET !== 'undefined' ? CIH_DATASET.getProjectSnapshot(projectName) : { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, formattedBudget: '₹1,000 Cr', deadline: 'Dec 2026' });
+        const liveSnap = (typeof getProjectSnapshot === 'function')
+            ? getProjectSnapshot(projectName)
+            : ((typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
+                ? CIH_DATASET.getProjectSnapshot(projectName)
+                : null);
+        const snap = liveSnap || snapshotData || { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, budget: 0, spent: 0, remainingBudget: 0, risks: [], expenses: [], materials: [] };
 
         const prompt = CIH_PROMPTS.riskAssessment(projectName, snap);
         const systemPrompt = `You are CIH Risk AI, an expert civil engineering risk analyst for Construction Intelligent Hub. Evaluate project telemetry and generate clean, structured, executive risk analysis reports.`;
@@ -217,16 +222,20 @@ ABSOLUTE RULES — NEVER VIOLATE:
      * Reports AI: Executive Project Performance & Audit Generator (Defaults to Llama 3.2)
      */
     generateExecutiveReport: async (projectName, reportFrequency = 'Weekly Report', modelName = "llama3.2") => {
-        const snap = (typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
-            ? CIH_DATASET.getProjectSnapshot(projectName)
-            : { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, formattedBudget: '₹1,000 Cr', deadline: 'Dec 2026' };
+        const liveSnap = (typeof getProjectSnapshot === 'function')
+            ? getProjectSnapshot(projectName)
+            : ((typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
+                ? CIH_DATASET.getProjectSnapshot(projectName)
+                : null);
+        const snap = liveSnap || { title: projectName, city: 'Site', status: 'Active', progressPercent: 50, budget: 0, spent: 0, remainingBudget: 0, risks: [], expenses: [], materials: [] };
 
         const freq = reportFrequency || 'Weekly Report';
+        const fmt = (n) => (typeof cihFormatMoney === 'function' ? cihFormatMoney(n) : n);
 
         const progressSummary = `${snap.progressPercent}% completion achieved against milestone targets for target completion date ${snap.deadline}. Current status is marked as '${snap.status}'.`;
-        const budgetSummary = `Allocated portfolio budget: ${snap.formattedBudget || snap.budget}. Current capital spend stands at ${snap.spentPercent}% (${snap.spent || 'n/a'}).`;
-        const riskSummary = `Overall project risk is evaluated as '${snap.suggestedRiskLevel || snap.riskLevel || 'MEDIUM'}'. Active site environmental hazard: ${snap.weatherHazard}. Open risks: ${(snap.risksList || []).length}.`;
-        const materialSummary = `Total inventory parcels tracked: ${snap.materialsCount || 0} items. ${(snap.lowStockMaterialsCount || 0) > 0 ? `Low stock alert for ${snap.lowStockMaterialsCount} item(s) requiring re-order.` : 'All material inventory stock levels remain within requirement thresholds.'}`;
+        const budgetSummary = `Allocated budget: ${snap.formattedBudget || fmt(snap.budget)}. Current capital spend: ${snap.formattedSpent || fmt(snap.spent)} (${snap.spentPercent || 0}%). Remaining: ${snap.formattedRemaining || fmt(snap.remainingBudget)}.`;
+        const riskSummary = `Overall project risk is evaluated as '${snap.suggestedRiskLevel || snap.riskLevel || 'MEDIUM'}'. Active site environmental hazard: ${snap.weatherHazard}. Open risks: ${(snap.risks || snap.risksList || []).length}.`;
+        const materialSummary = `Total inventory parcels tracked: ${(snap.materials || []).length} items. ${(snap.lowStockMaterialsCount || 0) > 0 ? `Low stock alert for ${snap.lowStockMaterialsCount} item(s) requiring re-order.` : 'All material inventory stock levels remain within requirement thresholds.'}`;
         const teamSummary = `Site operations led by ${snap.projectLead || 'Unassigned'} with ${snap.teamCount || 0} assigned specialist(s).`;
         const recommendations = [
             `Maintain regular supply re-order cycles to prevent stock bottlenecks at ${snap.title}.`,
@@ -313,21 +322,29 @@ ${text}
      * AI Insights 3: Predictive AI Forecast — live Ollama (llama3.2) from project telemetry
      */
     generateProjectForecast: async (projectName, modelName = "llama3.2") => {
-        const snap = (typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
-            ? CIH_DATASET.getProjectSnapshot(projectName)
-            : {
-                title: projectName,
-                city: 'Site',
-                status: 'Active',
-                progressPercent: 65,
-                budget: '₹4,200 Cr',
-                formattedBudget: '₹4,200 Cr',
-                deadline: 'Dec 15, 2026',
-                spentPercent: 45,
-                teamCount: 1,
-                lowStockMaterialsCount: 0,
-                suggestedRiskLevel: 'MEDIUM'
-            };
+        const liveSnap = (typeof getProjectSnapshot === 'function')
+            ? getProjectSnapshot(projectName)
+            : ((typeof CIH_DATASET !== 'undefined' && typeof CIH_DATASET.getProjectSnapshot === 'function')
+                ? CIH_DATASET.getProjectSnapshot(projectName)
+                : null);
+        const snap = liveSnap || {
+            title: projectName,
+            city: 'Site',
+            status: 'Active',
+            progressPercent: 65,
+            budget: 0,
+            spent: 0,
+            remainingBudget: 0,
+            formattedBudget: 'Not specified',
+            deadline: 'Not specified',
+            spentPercent: 0,
+            teamCount: 0,
+            lowStockMaterialsCount: 0,
+            suggestedRiskLevel: 'MEDIUM',
+            risks: [],
+            expenses: [],
+            materials: []
+        };
 
         const projectData = {
             title: snap.title || projectName || "Active Project",
@@ -335,9 +352,13 @@ ${text}
             progressPercent: snap.progressPercent,
             deadline: snap.deadline || "Not specified",
             formattedBudget: snap.formattedBudget || snap.budget || "Not specified",
+            formattedRemaining: snap.formattedRemaining,
+            remainingBudget: snap.remainingBudget,
             status: snap.status || "Not specified",
             riskLevel: snap.riskLevel || snap.suggestedRiskLevel || "Not specified",
             spentPercent: snap.spentPercent,
+            formattedSpent: snap.formattedSpent,
+            spent: snap.spent,
             teamCount: snap.teamCount,
             lowStockMaterialsCount: snap.lowStockMaterialsCount
         };
@@ -375,7 +396,6 @@ ${text}
      * Global Chatbot AI Assistant (ChatGPT Style, Defaults to Llama 3.2)
      */
     chatWithAssistant: async (userMsg, history = [], modelName = "llama3.2") => {
-        // Format history for Ollama chat API
         const messages = history.map(h => ({
             role: h.role === 'user' ? 'user' : 'assistant',
             content: h.content

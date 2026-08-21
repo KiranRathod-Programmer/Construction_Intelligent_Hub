@@ -550,10 +550,16 @@ function cihHydrateComputedViews() {
     const settings = CIH_DATASET.settings || {};
 
     projects.forEach((p) => {
+        const expenseSpent = expenses
+            .filter((e) => e.projectId === p.id)
+            .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        p.spent = expenseSpent;
+        p.remainingBudget = (Number(p.budget) || 0) - expenseSpent;
         p.icon = cihProjectIcon(p);
         p.statusClass = cihStatusClass(p.status);
         p.formattedBudget = cihFormatMoney(p.budget);
         p.formattedSpent = cihFormatMoney(p.spent);
+        p.formattedRemaining = cihFormatMoney(p.remainingBudget);
         p.formattedDeadline = cihFormatDate(p.deadline);
         p.budgetCrores = Math.round((Number(p.budget) || 0) / 1e7);
         p.spentPercent = Number(p.budget) > 0
@@ -726,7 +732,7 @@ function cihHydrateComputedViews() {
     CIH_DATASET.riskIncidents = risks;
 }
 
-function cihPersistDataset() {
+function commitAndSyncState() {
     const payload = {};
     CIH_PERSIST_KEYS.forEach((key) => {
         payload[key] = CIH_DATASET[key];
@@ -736,7 +742,62 @@ function cihPersistDataset() {
     } catch (err) {
         console.warn('[CIH] Failed to persist dataset:', err);
     }
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('cihDataUpdated'));
+    }
+}
+
+function getProjectSnapshot(projectId) {
+    const projects = CIH_DATASET.projects || [];
+    const project = projects.find((p) => p.id === projectId || p.title === projectId) || projects[0];
+    if (!project) return null;
+
+    const risks = (CIH_DATASET.risks || []).filter((r) => r.projectId === project.id);
+    const expenses = (CIH_DATASET.expenses || []).filter((e) => e.projectId === project.id);
+    const materials = (CIH_DATASET.materials || []).filter((m) => m.projectId === project.id);
+    const totalSpent = expenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const remainingBudget = (Number(project.budget) || 0) - totalSpent;
+    const team = (CIH_DATASET.team || []).filter((m) => (m.assignedProjects || []).includes(project.id));
+    const equipment = (CIH_DATASET.equipment || []).filter((e) => e.projectId === project.id);
+    const lowStock = materials.filter((m) => cihMaterialStatus(m).status === 'Low Stock');
+    const lowHealthEq = equipment.filter((e) => Number(e.engineHealthPct) < 85 || /service/i.test(e.status || ''));
+
+    return {
+        ...project,
+        spent: totalSpent,
+        remainingBudget,
+        risks,
+        expenses,
+        materials,
+        formattedBudget: project.formattedBudget || cihFormatMoney(project.budget),
+        formattedSpent: cihFormatMoney(totalSpent),
+        formattedRemaining: cihFormatMoney(remainingBudget),
+        spentPercent: Number(project.budget) > 0
+            ? Math.round((totalSpent / Number(project.budget)) * 100)
+            : 0,
+        deadline: project.formattedDeadline || cihFormatDate(project.deadline),
+        startDate: cihFormatDate(project.startDate),
+        teamMembers: team,
+        teamCount: team.length,
+        projectLead: project.projectLead || cihDefaultLeadName(),
+        equipmentList: equipment,
+        equipmentCount: equipment.length,
+        lowHealthEquipmentCount: lowHealthEq.length,
+        materialsList: materials,
+        materialsCount: materials.length,
+        lowStockMaterialsCount: lowStock.length,
+        risksList: risks,
+        expensesList: expenses,
+        expenseTotal: cihFormatMoney(totalSpent),
+        weatherHazard: cihWeatherHazard(project.city),
+        suggestedRiskLevel: project.riskLevel,
+        settings: CIH_DATASET.settings
+    };
+}
+
+function cihPersistDataset() {
     cihHydrateComputedViews();
+    commitAndSyncState();
 }
 
 function cihMergeWithSeed(stored) {
@@ -763,75 +824,39 @@ function cihLoadDataset() {
     const merged = cihMergeWithSeed(stored);
     Object.keys(CIH_DATASET).forEach((key) => { delete CIH_DATASET[key]; });
     Object.assign(CIH_DATASET, merged);
+    cihBindDatasetApi();
     cihHydrateComputedViews();
     if (!stored || !Array.isArray(stored.projects)) {
         cihPersistDataset();
+        cihBindDatasetApi();
     }
 }
 
 function cihGetProjectSnapshot(idOrTitle) {
-    const proj = cihFindProject(idOrTitle) || (CIH_DATASET.projects || [])[0];
-    if (!proj) {
-        return {
-            title: idOrTitle || 'Unassigned',
-            city: '—',
-            status: 'Unknown',
-            formattedBudget: cihFormatMoney(0),
-            deadline: '—',
-            progressPercent: 0,
-            spentPercent: 0
-        };
-    }
-
-    const team = (CIH_DATASET.team || []).filter((m) => (m.assignedProjects || []).includes(proj.id));
-    const equipment = (CIH_DATASET.equipment || []).filter((e) => e.projectId === proj.id);
-    const materials = (CIH_DATASET.materials || []).filter((m) => m.projectId === proj.id);
-    const risks = (CIH_DATASET.risks || []).filter((r) => r.projectId === proj.id);
-    const expenses = (CIH_DATASET.expenses || []).filter((e) => e.projectId === proj.id);
-    const lowStock = materials.filter((m) => cihMaterialStatus(m).status === 'Low Stock');
-    const lowHealthEq = equipment.filter((e) => Number(e.engineHealthPct) < 85 || /service/i.test(e.status || ''));
-    const expenseTotal = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-
-    return {
-        id: proj.id,
-        title: proj.title,
-        city: proj.city,
-        client: proj.client,
-        buildingType: proj.buildingType,
-        status: proj.status,
-        statusClass: proj.statusClass || cihStatusClass(proj.status),
-        budget: proj.formattedBudget,
-        formattedBudget: proj.formattedBudget,
-        rawBudget: proj.budget,
-        spent: proj.formattedSpent,
-        spentPercent: proj.spentPercent,
-        deadline: proj.formattedDeadline || cihFormatDate(proj.deadline),
-        startDate: cihFormatDate(proj.startDate),
-        progressPercent: proj.progressPercent,
-        projectLead: proj.projectLead || cihDefaultLeadName(),
-        teamMembers: team,
-        teamCount: team.length,
-        equipmentList: equipment,
-        equipmentCount: equipment.length,
-        lowHealthEquipmentCount: lowHealthEq.length,
-        materialsList: materials,
-        materialsCount: materials.length,
-        lowStockMaterialsCount: lowStock.length,
-        risksList: risks,
-        expensesList: expenses,
-        expenseTotal: cihFormatMoney(expenseTotal),
-        weatherHazard: cihWeatherHazard(proj.city),
-        suggestedRiskLevel: proj.riskLevel,
-        riskLevel: proj.riskLevel,
-        settings: CIH_DATASET.settings
+    return getProjectSnapshot(idOrTitle) || {
+        title: idOrTitle || 'Unassigned',
+        city: '—',
+        status: 'Unknown',
+        budget: 0,
+        spent: 0,
+        remainingBudget: 0,
+        formattedBudget: cihFormatMoney(0),
+        deadline: '—',
+        progressPercent: 0,
+        spentPercent: 0,
+        risks: [],
+        expenses: [],
+        materials: []
     };
 }
 
-const CIH_DATASET = {};
+function cihBindDatasetApi() {
+    CIH_DATASET.getProjectSnapshot = getProjectSnapshot;
+    CIH_DATASET.commitAndSyncState = commitAndSyncState;
+}
 
-CIH_DATASET.getProjectSnapshot = function (idOrTitle) {
-    return cihGetProjectSnapshot(idOrTitle);
-};
+const CIH_DATASET = {};
+cihBindDatasetApi();
 
 const CIH_API = {
     persist: () => {
@@ -879,10 +904,6 @@ const CIH_API = {
     },
     addExpense: (newExpense) => {
         CIH_DATASET.expenses.unshift(newExpense);
-        const proj = cihFindProject(newExpense.projectId);
-        if (proj) {
-            proj.spent = (Number(proj.spent) || 0) + (Number(newExpense.amount) || 0);
-        }
         cihPersistDataset();
         return Promise.resolve(newExpense);
     },
@@ -909,6 +930,4 @@ const CIH_API = {
 };
 
 cihLoadDataset();
-CIH_DATASET.getProjectSnapshot = function (idOrTitle) {
-    return cihGetProjectSnapshot(idOrTitle);
-};
+cihBindDatasetApi();
