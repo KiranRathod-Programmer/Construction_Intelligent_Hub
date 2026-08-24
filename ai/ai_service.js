@@ -466,3 +466,235 @@ ${text}
         };
     }
 };
+
+// ==========================================================================
+// DOCUMENT INTELLIGENCE — ON-DEMAND UI BINDINGS (ai-insights.html)
+// Upload stores text only. Ollama runs exclusively on Generate Analysis.
+// ==========================================================================
+let uploadedDocumentText = "";
+let uploadedDocumentTitle = "";
+
+function getDocumentAnalysisOutputEl() {
+    return document.getElementById("documentAnalysisOutput");
+}
+
+function showDocLoadingState() {
+    const outputEl = getDocumentAnalysisOutputEl();
+    const generateBtn = document.getElementById("generateDocAnalysisBtn");
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = "0.55";
+        generateBtn.style.cursor = "not-allowed";
+        generateBtn.innerHTML = "⏳ Generating with Ollama...";
+    }
+    if (outputEl) {
+        outputEl.innerHTML = `
+            <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 22px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+                <div style="display: flex; align-items: center; gap: 10px; color: #1E293B; font-weight: 700;">
+                    <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid #CBD5E1; border-top-color: #2563EB; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                    Analyzing document with llama3.2 — please wait.
+                </div>
+                <p style="margin: 10px 0 0; color: #64748B; font-size: 13px;">Calling local Ollama (llama3.2). This can take a moment.</p>
+            </div>
+            <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        `;
+    }
+}
+
+function resetDocGenerateButton() {
+    const generateBtn = document.getElementById("generateDocAnalysisBtn");
+    if (!generateBtn) return;
+    generateBtn.disabled = false;
+    generateBtn.style.opacity = "1";
+    generateBtn.style.cursor = "pointer";
+    generateBtn.innerHTML = "⚡ Generate Analysis";
+}
+
+async function sendDocumentToOllama(docText) {
+    const instructionsEl = document.getElementById("docUserInstructions");
+    const instructions = instructionsEl ? String(instructionsEl.value || "").trim() : "";
+    const title = uploadedDocumentTitle || "Uploaded Construction Document";
+    const modelSelect = document.getElementById("ai-model-select");
+    const activeModel = (modelSelect && modelSelect.value) ? modelSelect.value : "llama3.2";
+
+    let payload = String(docText || "");
+    if (instructions) {
+        payload += `\n\nUSER ANALYSIS INSTRUCTIONS:\n${instructions}`;
+    }
+
+    return CIH_AI_SERVICE.analyzeUploadedDocument(title, payload, activeModel);
+}
+
+function renderDocumentReport(analysisResponse) {
+    resetDocGenerateButton();
+    const outputEl = getDocumentAnalysisOutputEl();
+    if (!outputEl) return;
+
+    if (analysisResponse && analysisResponse.outOfScope) {
+        outputEl.innerHTML = `
+            <div style="padding: 1rem; border-left: 4px solid #f59e0b; background-color: #fef3c7; color: #92400e; border-radius: 4px; font-weight: 500;">
+                ⚠️ Off-Topic Document: The uploaded file does not contain recognized civil engineering, BOQ, or construction project data.
+            </div>
+        `;
+        return;
+    }
+
+    const html = (analysisResponse && analysisResponse.html)
+        ? analysisResponse.html
+        : AIUtils.formatMarkdownToHTML((analysisResponse && analysisResponse.rawText) || String(analysisResponse || ""));
+    const rawText = (analysisResponse && analysisResponse.rawText) || "";
+
+    if (typeof currentDocAnalysisReportText !== "undefined") currentDocAnalysisReportText = rawText;
+    if (typeof currentDocAnalysisData !== "undefined") currentDocAnalysisData = analysisResponse;
+    if (typeof currentUploadedDocTitle !== "undefined") currentUploadedDocTitle = uploadedDocumentTitle;
+    if (typeof currentUploadedDocContent !== "undefined") currentUploadedDocContent = uploadedDocumentText;
+
+    outputEl.innerHTML = `
+        <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 22px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #E2E8F0; padding-bottom: 12px; margin-bottom: 16px;">
+                <span style="font-weight: 700; color: #0F172A;">📄 Document Intelligence Report</span>
+                <span style="color: #059669; font-size: 12px; font-weight: 600;">[STATUS: COMPLETE]</span>
+            </div>
+            <div id="documentAnalysisReportBody" style="color: #1E293B; font-size: 14px; line-height: 1.7;">${html}</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #E2E8F0;">
+                <span style="color: #64748B; font-size: 12px;">Generated by <strong>CIH Neural AI Engine (Llama 3.2)</strong></span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn-primary" id="btnCopyDocSummary" onclick="copyDocAISummary()" style="padding: 8px 14px; font-size: 12px; border-radius: 6px;">📋 Copy Text</button>
+                    <button type="button" class="btn-primary" id="btnPrintDocSummary" onclick="printDocAISummary()" style="padding: 8px 14px; font-size: 12px; border-radius: 6px;">🖨️ Export PDF</button>
+                    <button type="button" class="btn-primary" id="btnDownloadDocSummary" onclick="downloadDocAISummary()" style="padding: 8px 16px; font-size: 12px; border-radius: 6px;">📥 Download Insights Report (.TXT)</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderDocError(error) {
+    resetDocGenerateButton();
+    const outputEl = getDocumentAnalysisOutputEl();
+    if (!outputEl) return;
+    const message = (error && error.message) ? error.message : String(error || "Unknown error");
+    outputEl.innerHTML = `
+        <div style="padding: 1rem; border-left: 4px solid #ef4444; background-color: #fef2f2; color: #991b1b; border-radius: 4px; font-weight: 500;">
+            ⚠️ Document Intelligence requires a live Ollama instance (llama3.2).<br><br>
+            ${message}<br><br>
+            Start Ollama locally, confirm the model is available, then click Generate Analysis again.
+        </div>
+    `;
+}
+
+function setDocFileStatus(message, isError) {
+    const statusEl = document.getElementById("docFileStatus");
+    if (!statusEl) return;
+    statusEl.style.color = isError ? "#B91C1C" : "#334155";
+    statusEl.innerHTML = message;
+}
+
+async function storeUploadedDocumentFile(file) {
+    if (!file) return;
+
+    const validation = CIH_AI_SERVICE.validateUploadedDocumentFile(file);
+    if (!validation.valid) {
+        uploadedDocumentText = "";
+        uploadedDocumentTitle = "";
+        setDocFileStatus(`⚠️ ${validation.message}`, true);
+        alert(`Upload Error: ${validation.message}`);
+        return;
+    }
+
+    setDocFileStatus(`⏳ Reading <strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB)…`, false);
+
+    try {
+        const extractedText = await CIH_AI_SERVICE.extractTextFromFile(file);
+        uploadedDocumentText = String(extractedText || "");
+        uploadedDocumentTitle = file.name;
+
+        if (typeof currentUploadedDocContent !== "undefined") currentUploadedDocContent = uploadedDocumentText;
+        if (typeof currentUploadedDocTitle !== "undefined") currentUploadedDocTitle = uploadedDocumentTitle;
+        if (typeof currentDocAnalysisReportText !== "undefined") currentDocAnalysisReportText = null;
+        if (typeof currentDocAnalysisData !== "undefined") currentDocAnalysisData = null;
+
+        const outputEl = getDocumentAnalysisOutputEl();
+        if (outputEl) outputEl.innerHTML = "";
+
+        setDocFileStatus(`📄 Uploaded: <strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB). Click Generate Analysis when ready.`, false);
+    } catch (err) {
+        uploadedDocumentText = "";
+        uploadedDocumentTitle = "";
+        setDocFileStatus(`⚠️ Could not read <strong>${file.name}</strong>.`, true);
+        alert(`Failed to extract text from ${file.name}: ${err.message}`);
+    }
+}
+
+function initDocumentIntelligenceWorkflow() {
+    const fileInput = document.getElementById("docFileInput");
+    const dropZone = document.getElementById("docDropZone");
+    const generateBtn = document.getElementById("generateDocAnalysisBtn");
+    if (!fileInput || !generateBtn) return;
+
+    fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files && event.target.files[0];
+        await storeUploadedDocumentFile(file);
+    });
+
+    if (dropZone) {
+        dropZone.addEventListener("click", (event) => {
+            if (event.target === fileInput) return;
+            fileInput.click();
+        });
+        dropZone.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            dropZone.style.borderColor = "#2563EB";
+            dropZone.style.background = "#EFF6FF";
+        });
+        dropZone.addEventListener("dragleave", () => {
+            dropZone.style.borderColor = "#CBD5E1";
+            dropZone.style.background = "#F8FAFC";
+        });
+        dropZone.addEventListener("drop", async (event) => {
+            event.preventDefault();
+            dropZone.style.borderColor = "#CBD5E1";
+            dropZone.style.background = "#F8FAFC";
+            const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+            if (file) {
+                fileInput.value = "";
+                await storeUploadedDocumentFile(file);
+            }
+        });
+    }
+
+    generateBtn.addEventListener("click", async () => {
+        if (!uploadedDocumentText || uploadedDocumentText.trim() === "") {
+            alert("Please upload a valid construction document first.");
+            return;
+        }
+
+        if (!containsConstructionContext(uploadedDocumentText)) {
+            const outputEl = getDocumentAnalysisOutputEl();
+            if (outputEl) {
+                outputEl.innerHTML = `
+                    <div style="padding: 1rem; border-left: 4px solid #f59e0b; background-color: #fef3c7; color: #92400e; border-radius: 4px; font-weight: 500;">
+                        ⚠️ Off-Topic Document: The uploaded file does not contain recognized civil engineering, BOQ, or construction project data.
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        showDocLoadingState();
+
+        try {
+            const analysisResponse = await sendDocumentToOllama(uploadedDocumentText);
+            renderDocumentReport(analysisResponse);
+        } catch (error) {
+            renderDocError(error);
+        }
+    });
+}
+
+if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initDocumentIntelligenceWorkflow);
+    } else {
+        initDocumentIntelligenceWorkflow();
+    }
+}
