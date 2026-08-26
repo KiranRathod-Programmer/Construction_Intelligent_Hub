@@ -76,3 +76,4 @@ AI settings are in `ai/config.js` (default: `http://localhost:11434`, model `lla
 - Files in `data/json` and `data/csv` are sample copies — not the live database.
 - Clear site data in the browser to reset to the default sample projects.
 
+   
